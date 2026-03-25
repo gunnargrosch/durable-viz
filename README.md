@@ -300,6 +300,10 @@ node packages/cli/dist/bin.js examples/order-workflow.ts --open
 
 Test the VS Code extension by pressing `F5` in the `packages/vscode` directory to launch the Extension Development Host.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes.
+
 ## License
 
 MIT
