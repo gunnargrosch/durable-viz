@@ -52,7 +52,7 @@ function openPanel(context: vscode.ExtensionContext, filePath: string) {
     currentFilePath = undefined
   })
 
-  // Handle messages from webview (click-to-navigate)
+  // Handle messages from webview
   currentPanel.webview.onDidReceiveMessage(async (message) => {
     if (message.type === 'goToLine' && currentFilePath) {
       const line = message.line - 1 // VS Code uses 0-based lines
@@ -62,6 +62,17 @@ function openPanel(context: vscode.ExtensionContext, filePath: string) {
       const range = new vscode.Range(line, 0, line, 0)
       editor.selection = new vscode.Selection(range.start, range.start)
       editor.revealRange(range, vscode.TextEditorRevealType.InCenter)
+    } else if (message.type === 'savePng') {
+      const name = currentFilePath ? currentFilePath.split('/').pop()?.replace(/\.[^.]+$/, '') : 'workflow'
+      const uri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file(`${name}-durable-viz.png`),
+        filters: { 'PNG Image': ['png'] },
+      })
+      if (uri) {
+        const base64 = message.data.replace(/^data:image\/png;base64,/, '')
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(base64, 'base64'))
+        vscode.window.showInformationMessage(`Saved: ${uri.fsPath}`)
+      }
     }
   })
 
@@ -180,6 +191,7 @@ function buildWebviewHtml(mermaid: string, title: string): string {
       <span id="zoom-level">100%</span>
       <button id="zoom-in">+</button>
       <button id="zoom-fit">Fit</button>
+      <button id="download-png">Save PNG</button>
     </div>
   </header>
   <div class="diagram-container" id="container">
@@ -305,6 +317,26 @@ ${mermaid}
       setZoom(scale / 1.25, rect.width / 2, rect.height / 2);
     };
     document.getElementById('zoom-fit').onclick = fitToView;
+
+    document.getElementById('download-png').onclick = () => {
+      const svg = wrapper.querySelector('svg');
+      if (!svg) return;
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const canvas = document.createElement('canvas');
+      const s = 2;
+      canvas.width = svg.clientWidth * s;
+      canvas.height = svg.clientHeight * s;
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.onload = () => {
+        ctx.fillStyle = '#1e1e1e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/png');
+        vscode.postMessage({ type: 'savePng', data: dataUrl });
+      };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+    };
 
     // Auto-fit after Mermaid renders
     setTimeout(fitToView, 500);

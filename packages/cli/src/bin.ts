@@ -149,6 +149,7 @@ function buildHtml(mermaid: string, title: string): string {
       <span id="zoom-level">100%</span>
       <button id="zoom-in">+</button>
       <button id="zoom-fit">Fit</button>
+      <button id="download-png">Save PNG</button>
     </div>
   </header>
   <div class="diagram-container" id="container">
@@ -263,6 +264,28 @@ ${mermaid}
     };
     document.getElementById('zoom-fit').onclick = fitToView;
 
+    document.getElementById('download-png').onclick = () => {
+      const svg = wrapper.querySelector('svg');
+      if (!svg) return;
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const canvas = document.createElement('canvas');
+      const scale = 2;
+      canvas.width = svg.clientWidth * scale;
+      canvas.height = svg.clientHeight * scale;
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.onload = () => {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const a = document.createElement('a');
+        a.download = '${title}-durable-viz.png';
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+      };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+    };
+
     setTimeout(() => {
       fitToView();
       wrapper.classList.add('ready');
@@ -275,7 +298,7 @@ ${mermaid}
 const program = new Command()
   .name('durable-viz')
   .description('Visualize AWS Lambda Durable Functions workflows')
-  .version('0.1.1')
+  .version('0.1.2')
   .argument('<file>', 'Path to a TypeScript file containing a durable function handler')
   .option('-d, --direction <dir>', 'Graph direction: TD (top-down) or LR (left-right)', 'TD')
   .option('-n, --name <name>', 'Override the workflow name')

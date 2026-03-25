@@ -102,7 +102,7 @@ ext install gunnargrosch.durable-viz
 cd packages/vscode
 pnpm build
 npx @vscode/vsce package --no-dependencies
-code --install-extension durable-viz-0.1.1.vsix
+code --install-extension durable-viz-*.vsix
 ```
 
 ### Usage

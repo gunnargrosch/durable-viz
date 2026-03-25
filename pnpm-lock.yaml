@@ -9,17 +9,16 @@ importers:
   .: {}
 
   packages/cli:
-    dependencies:
+    devDependencies:
       '@durable-viz/core':
         specifier: workspace:*
         version: link:../core
-      commander:
-        specifier: ^13.0.0
-        version: 13.1.0
-    devDependencies:
       '@types/node':
         specifier: ^25.5.0
         version: 25.5.0
+      commander:
+        specifier: ^13.0.0
+        version: 13.1.0
       esbuild:
         specifier: ^0.25.0
         version: 0.25.12
