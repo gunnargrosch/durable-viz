@@ -203,7 +203,7 @@ ${mermaid}
 
     const vscode = acquireVsCodeApi();
 
-    // Mermaid click callback — called when a node with a source line is clicked
+    // Mermaid click callback - called when a node with a source line is clicked
     window.onNodeClick = function(line) {
       vscode.postMessage({ type: 'goToLine', line: line });
     };

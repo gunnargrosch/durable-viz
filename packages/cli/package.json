@@ -1,7 +1,7 @@
 {
   "name": "durable-viz",
-  "version": "0.1.0",
-  "description": "Visualize AWS Lambda Durable Functions workflows — CLI and core library",
+  "version": "0.1.1",
+  "description": "Visualize AWS Lambda Durable Functions workflows. CLI and core library.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -24,7 +24,8 @@
     "durable-viz": "dist/bin.cjs"
   },
   "files": [
-    "dist/bin.cjs"
+    "dist/bin.cjs",
+    "README.md"
   ],
   "scripts": {
     "build": "esbuild src/bin.ts --bundle --outfile=dist/bin.cjs --format=cjs --platform=node --banner:js='#!/usr/bin/env node'"

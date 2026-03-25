@@ -7,9 +7,44 @@
 [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A520-green)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Visualize [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows. Static analysis turns your handler code into a flowchart — no deployment or execution required.
+Visualize [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows. Static analysis turns your handler code into a flowchart, no deployment or execution required.
 
 Supports **TypeScript/JavaScript**, **Python**, and **Java** runtimes.
+
+```mermaid
+graph LR
+  node_start([Start])
+  step_1[validate]
+  parallel_2{{prepare}}
+  subgraph sub_parallel_2[" "]
+    invoke_3[/check-inventory\]
+    invoke_4[/reserve-payment\]
+  end
+  style sub_parallel_2 fill:transparent,stroke:#444,stroke-width:1px,stroke-dasharray:5 5
+  step_5[fulfill]
+  cond_6{approval?}
+  callback_7((wait))
+  node_end([End])
+  node_start --> step_1
+  step_1 --> parallel_2
+  parallel_2 --> invoke_3
+  parallel_2 --> invoke_4
+  invoke_3 --> step_5
+  invoke_4 --> step_5
+  step_5 --> cond_6
+  cond_6 -->|yes| callback_7
+  cond_6 -->|no| node_end
+  callback_7 --> node_end
+  style node_start fill:#5b8ab4,stroke:#4a7293,color:#e8edf2
+  style step_1 fill:#4a8c72,stroke:#3d7360,color:#e0efe8
+  style parallel_2 fill:#7b6b9e,stroke:#655883,color:#e8e3f0
+  style invoke_3 fill:#b8873a,stroke:#967032,color:#f5edd8
+  style invoke_4 fill:#b8873a,stroke:#967032,color:#f5edd8
+  style step_5 fill:#4a8c72,stroke:#3d7360,color:#e0efe8
+  style cond_6 fill:#6b71a8,stroke:#575c8a,color:#e3e4f0
+  style callback_7 fill:#b05a5a,stroke:#8f4a4a,color:#f2e0e0
+  style node_end fill:#5b8ab4,stroke:#4a7293,color:#e8edf2
+```
 
 ## Table of Contents
 
@@ -67,7 +102,7 @@ ext install gunnargrosch.durable-viz
 cd packages/vscode
 pnpm build
 npx @vscode/vsce package --no-dependencies
-code --install-extension durable-viz-0.1.0.vsix
+code --install-extension durable-viz-0.1.1.vsix
 ```
 
 ### Usage
@@ -109,19 +144,19 @@ Options:
 
 ### Output Formats
 
-**Mermaid** (default) — prints Mermaid flowchart syntax to stdout. Paste into GitHub Markdown, Notion, or any Mermaid-compatible renderer.
+**Mermaid** (default) prints Mermaid flowchart syntax to stdout. Paste into GitHub Markdown, Notion, or any Mermaid-compatible renderer.
 
 ```shell
 durable-viz handler.ts
 ```
 
-**Browser** — generates a self-contained HTML file and opens it. Includes dark theme, zoom controls, and color legend.
+**Browser** generates a self-contained HTML file and opens it. Includes dark theme, zoom controls, and color legend.
 
 ```shell
 durable-viz handler.ts --open
 ```
 
-**JSON** — outputs the raw workflow graph (nodes, edges, source lines) for custom tooling.
+**JSON** outputs the raw workflow graph (nodes, edges, source lines) for custom tooling.
 
 ```shell
 durable-viz handler.ts --json
@@ -161,7 +196,7 @@ Each primitive type has a distinct shape and color in the diagram:
 
 ## How It Works
 
-The tool performs static analysis on your source file — it never imports, executes, or deploys your code.
+The tool performs static analysis on your source file. It never imports, executes, or deploys your code.
 
 ### TypeScript / JavaScript
 
@@ -169,8 +204,8 @@ Uses [ts-morph](https://github.com/dsherret/ts-morph) to parse the AST. Finds `w
 
 **Advanced features** (TypeScript only):
 
-- **Function-reference following** — if the handler calls a helper function that accepts `DurableContext`, the parser resolves it and inlines its durable calls at the call site.
-- **Registry key resolution** — for dynamic `context.parallel()` calls using `.map()` over a registry object (like a specialist map), the parser enumerates the registry keys to show all possible parallel branches.
+- **Function-reference following.** If the handler calls a helper function that accepts `DurableContext`, the parser resolves it and inlines its durable calls at the call site.
+- **Registry key resolution.** For dynamic `context.parallel()` calls using `.map()` over a registry object (like a specialist map), the parser enumerates the registry keys to show all possible parallel branches.
 
 ### Python
 
@@ -227,7 +262,7 @@ durable-viz/
 
 ### Architecture
 
-The core package is language-agnostic above the parser layer. Adding a new language means implementing the `Parser` interface (two methods: `extensions` and `parseFile`) — the graph model, edge builder, and all renderers are shared.
+The core package is language-agnostic above the parser layer. Adding a new language means implementing the `Parser` interface (two methods: `extensions` and `parseFile`). The graph model, edge builder, and all renderers are shared.
 
 ```
 [source file] → Parser → WorkflowGraph → Renderer → [output]
@@ -237,11 +272,11 @@ The core package is language-agnostic above the parser layer. Adding a new langu
 
 ## Limitations
 
-- **Same-file only** — function-reference following resolves functions defined in the same file. Imported helpers from other files are not followed.
-- **Static analysis** — the parser sees all possible paths, not a specific execution. Dynamic parallel branches (from `.map()`) show all registered targets, even if a given execution only uses a subset.
-- **Mermaid rendering** — arrow routing for fan-in (multiple edges converging on one node) is controlled by Mermaid's layout engine. Complex workflows with many parallel branches may have overlapping edges.
-- **Java SDK preview** — the Java durable execution SDK is in preview. Some primitives (`waitForCondition`, `waitForCallback`, `parallel`, `map`) may not be available yet.
-- **Python/Java parsers are regex-based** — they handle standard patterns well but may miss unusual formatting (e.g., method calls split across many lines with comments between arguments).
+- **Same-file only.** Function-reference following resolves functions defined in the same file. Imported helpers from other files are not followed.
+- **Static analysis.** The parser sees all possible paths, not a specific execution. Dynamic parallel branches (from `.map()`) show all registered targets, even if a given execution only uses a subset.
+- **Mermaid rendering.** Arrow routing for fan-in (multiple edges converging on one node) is controlled by Mermaid's layout engine. Complex workflows with many parallel branches may have overlapping edges.
+- **Java SDK preview.** The Java durable execution SDK is in preview. Some primitives (`waitForCondition`, `waitForCallback`, `parallel`, `map`) may not be available yet.
+- **Python/Java parsers are regex-based.** They handle standard patterns well but may miss unusual formatting (e.g., method calls split across many lines with comments between arguments).
 
 ## Contributing
 

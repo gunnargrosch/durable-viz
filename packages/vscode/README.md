@@ -1,17 +1,17 @@
 # Durable Viz
 
-Visualize [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows directly in VS Code. Static analysis turns your handler code into an interactive flowchart — no deployment or execution required.
+Visualize [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows directly in VS Code. Static analysis turns your handler code into an interactive flowchart, no deployment or execution required.
 
 Supports **TypeScript/JavaScript**, **Python**, and **Java** runtimes.
 
 ## Features
 
-- **Interactive diagram** — see your durable function as a flowchart in a side panel
-- **Scroll zoom** — scroll wheel to zoom in/out, zooms toward cursor
-- **Click-drag pan** — click and drag to move around the diagram
-- **Click-to-navigate** — click any node to jump to that line in the source file
-- **Auto-refresh** — diagram updates when you save the file
-- **All primitives** — step, invoke, parallel, map, wait, callbacks, conditions, child contexts
+- **Interactive diagram.** See your durable function as a flowchart in a side panel.
+- **Scroll zoom.** Scroll wheel to zoom in/out, zooms toward cursor.
+- **Click-drag pan.** Click and drag to move around the diagram.
+- **Click-to-navigate.** Click any node to jump to that line in the source file.
+- **Auto-refresh.** Diagram updates when you save the file.
+- **All primitives.** Step, invoke, parallel, map, wait, callbacks, conditions, child contexts.
 
 ## Usage
 
