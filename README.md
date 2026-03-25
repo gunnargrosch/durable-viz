@@ -122,6 +122,9 @@ The diagram appears in a side panel. It auto-refreshes when you save the file.
 | **Click-to-navigate** | Click any node to jump to that line in the source file |
 | **Auto-refresh** | Diagram updates on file save |
 | **Fit to view** | Fit button and auto-fit on open |
+| **Direction toggle** | Switch between top-down (TD) and left-right (LR) layout |
+| **Save PNG** | Export the diagram as a high-resolution transparent PNG |
+| **Source view** | View the raw Mermaid syntax or JSON graph |
 
 The extension activates for `.ts`, `.js`, `.py`, and `.java` files. A toolbar button also appears in the editor title bar for these file types.
 
@@ -296,6 +299,10 @@ node packages/cli/dist/bin.js examples/order-workflow.ts --open
 ```
 
 Test the VS Code extension by pressing `F5` in the `packages/vscode` directory to launch the Extension Development Host.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes.
 
 ## License
 
