@@ -1,0 +1,65 @@
+{
+  "name": "durable-viz",
+  "displayName": "Durable Viz",
+  "description": "Visualize AWS Lambda Durable Functions workflows — see your step, parallel, invoke, and callback primitives as an interactive flowchart.",
+  "version": "0.1.0",
+  "publisher": "gunnargrosch",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gunnargrosch/durable-viz"
+  },
+  "homepage": "https://github.com/gunnargrosch/durable-viz#vs-code-extension",
+  "bugs": {
+    "url": "https://github.com/gunnargrosch/durable-viz/issues"
+  },
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Visualization"],
+  "keywords": [
+    "aws",
+    "lambda",
+    "durable functions",
+    "workflow",
+    "visualization",
+    "serverless",
+    "mermaid",
+    "flowchart"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "durable-viz.open",
+        "title": "Durable Viz: Open Lambda Durable Function Workflow",
+        "icon": "$(type-hierarchy)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "durable-viz.open",
+          "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python || resourceLangId == java",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "pnpm build --watch",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@durable-viz/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^25.5.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.0"
+  }
+}

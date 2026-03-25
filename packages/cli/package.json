@@ -1,0 +1,22 @@
+{
+  "name": "durable-viz",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "durable-viz": "dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@durable-viz/core": "workspace:*",
+    "commander": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.8.0"
+  }
+}
