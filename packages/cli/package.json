@@ -1,15 +1,33 @@
 {
   "name": "durable-viz",
   "version": "0.1.0",
-  "type": "module",
+  "description": "Visualize AWS Lambda Durable Functions workflows — CLI and core library",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gunnargrosch/durable-viz"
+  },
+  "homepage": "https://github.com/gunnargrosch/durable-viz",
+  "bugs": {
+    "url": "https://github.com/gunnargrosch/durable-viz/issues"
+  },
+  "keywords": [
+    "aws",
+    "lambda",
+    "durable-functions",
+    "workflow",
+    "visualization",
+    "mermaid",
+    "serverless"
+  ],
   "bin": {
-    "durable-viz": "dist/bin.js"
+    "durable-viz": "dist/bin.cjs"
   },
   "files": [
-    "dist"
+    "dist/bin.cjs"
   ],
   "scripts": {
-    "build": "tsc"
+    "build": "esbuild src/bin.ts --bundle --outfile=dist/bin.cjs --format=cjs --platform=node --banner:js='#!/usr/bin/env node'"
   },
   "dependencies": {
     "@durable-viz/core": "workspace:*",
@@ -17,6 +35,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "esbuild": "^0.25.0",
     "typescript": "^5.8.0"
   }
 }

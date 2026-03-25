@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { Command } from 'commander'
 import { resolve, basename } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -58,7 +56,8 @@ function buildHtml(mermaid: string, title: string): string {
       color: #e2e8f0;
       display: flex;
       flex-direction: column;
-      min-height: 100vh;
+      height: 100vh;
+      overflow: hidden;
     }
     header {
       display: flex;
@@ -92,36 +91,44 @@ function buildHtml(mermaid: string, title: string): string {
     .controls span { color: #64748b; font-size: 0.8rem; }
     .diagram-container {
       flex: 1;
-      overflow: auto;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem;
+      overflow: hidden;
+      position: relative;
+      cursor: grab;
     }
+    .diagram-container.dragging { cursor: grabbing; }
     .diagram-wrapper {
-      transform-origin: center center;
-      transition: transform 0.15s ease;
+      position: absolute;
+      transform-origin: 0 0;
+      opacity: 0;
+      transition: opacity 0.3s ease;
     }
-    .mermaid {
-      background: #1e293b;
-      border-radius: 12px;
-      padding: 2rem 3rem;
-    }
+    .diagram-wrapper.ready { opacity: 1; }
     .mermaid svg {
       max-width: none !important;
       height: auto !important;
     }
     .mermaid .node .label { padding: 8px 12px; }
+    footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid #1e293b;
+      flex-shrink: 0;
+      padding: 0.5rem 1.5rem;
+    }
     .legend {
       display: flex;
       gap: 1.5rem;
       flex-wrap: wrap;
-      padding: 0.75rem 1.5rem;
       font-size: 0.75rem;
       color: #64748b;
-      border-top: 1px solid #1e293b;
-      flex-shrink: 0;
     }
+    footer a {
+      color: #64748b;
+      font-size: 0.75rem;
+      text-decoration: none;
+    }
+    footer a:hover { color: #94a3b8; }
     .legend-item {
       display: flex;
       align-items: center;
@@ -151,15 +158,18 @@ ${mermaid}
       </pre>
     </div>
   </div>
-  <div class="legend">
-    <div class="legend-item"><div class="legend-swatch" style="background:#5b8ab4"></div> Start / End</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#4a8c72"></div> Step</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#b8873a"></div> Invoke</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#7b6b9e"></div> Parallel / Map</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#b05a5a"></div> Wait / Callback</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#6b71a8"></div> Condition</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#4a849e"></div> Child Context</div>
-  </div>
+  <footer>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:#5b8ab4"></div> Start / End</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#4a8c72"></div> Step</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#b8873a"></div> Invoke</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#7b6b9e"></div> Parallel / Map</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#b05a5a"></div> Wait / Callback</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#6b71a8"></div> Condition</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#4a849e"></div> Child Context</div>
+    </div>
+    <a href="https://github.com/gunnargrosch/durable-viz" target="_blank">github.com/gunnargrosch/durable-viz</a>
+  </footer>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
     mermaid.initialize({
@@ -169,36 +179,94 @@ ${mermaid}
       themeVariables: { nodePadding: 12 },
     });
 
-    let scale = 1;
     const wrapper = document.getElementById('wrapper');
-    const label = document.getElementById('zoom-level');
+    const zoomLabel = document.getElementById('zoom-level');
     const container = document.getElementById('container');
 
-    function setZoom(s) {
-      scale = Math.max(0.25, Math.min(4, s));
-      wrapper.style.transform = 'scale(' + scale + ')';
-      label.textContent = Math.round(scale * 100) + '%';
+    let scale = 1;
+    let panX = 0;
+    let panY = 0;
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let panStartX = 0;
+    let panStartY = 0;
+
+    function applyTransform() {
+      wrapper.style.transform = 'translate(' + panX + 'px, ' + panY + 'px) scale(' + scale + ')';
+      zoomLabel.textContent = Math.round(scale * 100) + '%';
     }
 
-    document.getElementById('zoom-in').onclick = () => setZoom(scale + 0.25);
-    document.getElementById('zoom-out').onclick = () => setZoom(scale - 0.25);
-    document.getElementById('zoom-fit').onclick = () => {
+    function setZoom(newScale, cx, cy) {
+      newScale = Math.max(0.1, Math.min(5, newScale));
+      if (cx !== undefined && cy !== undefined) {
+        panX = cx - (cx - panX) * (newScale / scale);
+        panY = cy - (cy - panY) * (newScale / scale);
+      }
+      scale = newScale;
+      applyTransform();
+    }
+
+    function fitToView() {
       const svg = wrapper.querySelector('svg');
       if (!svg) return;
-      const hRatio = container.clientWidth / svg.clientWidth;
-      const vRatio = container.clientHeight / svg.clientHeight;
-      setZoom(Math.min(hRatio, vRatio) * 0.9);
-    };
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      const sw = svg.clientWidth || svg.getBoundingClientRect().width;
+      const sh = svg.clientHeight || svg.getBoundingClientRect().height;
+      if (!sw || !sh) return;
+      const fitScale = Math.min(cw / sw, ch / sh) * 0.85;
+      scale = fitScale;
+      panX = (cw - sw * scale) / 2;
+      panY = (ch - sh * scale) / 2;
+      applyTransform();
+    }
 
     container.addEventListener('wheel', (e) => {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        setZoom(scale + (e.deltaY < 0 ? 0.1 : -0.1));
-      }
+      e.preventDefault();
+      const rect = container.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const delta = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      setZoom(scale * delta, cx, cy);
     }, { passive: false });
 
-    // Auto-fit after Mermaid renders
-    setTimeout(() => document.getElementById('zoom-fit').click(), 500);
+    container.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      panStartX = panX;
+      panStartY = panY;
+      container.classList.add('dragging');
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      panX = panStartX + (e.clientX - dragStartX);
+      panY = panStartY + (e.clientY - dragStartY);
+      applyTransform();
+    });
+
+    window.addEventListener('mouseup', () => {
+      isDragging = false;
+      container.classList.remove('dragging');
+    });
+
+    document.getElementById('zoom-in').onclick = () => {
+      const rect = container.getBoundingClientRect();
+      setZoom(scale * 1.25, rect.width / 2, rect.height / 2);
+    };
+    document.getElementById('zoom-out').onclick = () => {
+      const rect = container.getBoundingClientRect();
+      setZoom(scale / 1.25, rect.width / 2, rect.height / 2);
+    };
+    document.getElementById('zoom-fit').onclick = fitToView;
+
+    setTimeout(() => {
+      fitToView();
+      wrapper.classList.add('ready');
+    }, 500);
   </script>
 </body>
 </html>`
