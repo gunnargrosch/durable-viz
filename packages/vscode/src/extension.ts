@@ -3,6 +3,7 @@ import { parseFile, renderMermaid } from '@durable-viz/core'
 
 let currentPanel: vscode.WebviewPanel | undefined
 let currentFilePath: string | undefined
+let currentDirection: 'TD' | 'LR' = 'TD'
 
 export function activate(context: vscode.ExtensionContext) {
   const command = vscode.commands.registerCommand('durable-viz.open', () => {
@@ -73,6 +74,8 @@ function openPanel(context: vscode.ExtensionContext, filePath: string) {
         await vscode.workspace.fs.writeFile(uri, Buffer.from(base64, 'base64'))
         vscode.window.showInformationMessage(`Saved: ${uri.fsPath}`)
       }
+    } else if (message.type === 'directionChanged') {
+      currentDirection = message.direction
     }
   })
 
@@ -82,22 +85,22 @@ function openPanel(context: vscode.ExtensionContext, filePath: string) {
 function updatePanel(panel: vscode.WebviewPanel, filePath: string) {
   try {
     const graph = parseFile(filePath)
-    const mermaid = renderMermaid(graph, { direction: 'TD' })
+    const mermaid = renderMermaid(graph, { direction: currentDirection })
     panel.title = `Durable Viz: ${graph.name}`
-    panel.webview.html = buildWebviewHtml(mermaid, graph.name)
+    panel.webview.html = buildWebviewHtml(mermaid, graph.name, JSON.stringify(graph, null, 2), currentDirection)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     panel.webview.html = buildErrorHtml(message)
   }
 }
 
-function buildWebviewHtml(mermaid: string, title: string): string {
+function buildWebviewHtml(mermaid: string, title: string, graphJson: string, direction: 'TD' | 'LR'): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; script-src https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'unsafe-inline';">
+    content="default-src 'none'; script-src https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:;">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -153,7 +156,10 @@ function buildWebviewHtml(mermaid: string, title: string): string {
     .diagram-wrapper {
       position: absolute;
       transform-origin: 0 0;
+      opacity: 0;
+      transition: opacity 0.3s ease;
     }
+    .diagram-wrapper.ready { opacity: 1; }
     .mermaid svg {
       max-width: none !important;
       height: auto !important;
@@ -181,6 +187,43 @@ function buildWebviewHtml(mermaid: string, title: string): string {
       height: 10px;
       border-radius: 2px;
     }
+    .source-panel {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: var(--vscode-editor-background, #1e1e1e);
+      z-index: 10;
+      flex-direction: column;
+    }
+    .source-panel.visible { display: flex; }
+    .source-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--vscode-panel-border, #333);
+      flex-shrink: 0;
+    }
+    .source-tabs button {
+      background: none;
+      border: none;
+      color: var(--vscode-descriptionForeground, #888);
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      border-bottom: 2px solid transparent;
+    }
+    .source-tabs button.active {
+      color: var(--vscode-editor-foreground, #d4d4d4);
+      border-bottom-color: var(--vscode-editor-foreground, #d4d4d4);
+    }
+    .source-content {
+      flex: 1;
+      overflow: auto;
+      padding: 12px;
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 12px;
+      white-space: pre;
+      color: var(--vscode-editor-foreground, #d4d4d4);
+    }
   </style>
 </head>
 <body>
@@ -191,7 +234,9 @@ function buildWebviewHtml(mermaid: string, title: string): string {
       <span id="zoom-level">100%</span>
       <button id="zoom-in">+</button>
       <button id="zoom-fit">Fit</button>
+      <button id="toggle-direction">${direction === 'TD' ? 'LR' : 'TD'}</button>
       <button id="download-png">Save PNG</button>
+      <button id="toggle-source">Source</button>
     </div>
   </header>
   <div class="diagram-container" id="container">
@@ -199,6 +244,13 @@ function buildWebviewHtml(mermaid: string, title: string): string {
       <pre class="mermaid">
 ${mermaid}
       </pre>
+    </div>
+    <div class="source-panel" id="source-panel">
+      <div class="source-tabs">
+        <button class="active" data-tab="mermaid">Mermaid</button>
+        <button data-tab="json">JSON</button>
+      </div>
+      <div class="source-content" id="source-content"></div>
     </div>
   </div>
   <div class="legend">
@@ -210,6 +262,7 @@ ${mermaid}
     <div class="legend-item"><div class="legend-swatch" style="background:#6b71a8"></div> Condition</div>
     <div class="legend-item"><div class="legend-swatch" style="background:#4a849e"></div> Child Context</div>
   </div>
+  <script type="application/json" id="graph-json">${graphJson}</script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 
@@ -233,6 +286,7 @@ ${mermaid}
     const zoomLabel = document.getElementById('zoom-level');
     const container = document.getElementById('container');
 
+    let mermaidRaw = document.querySelector('.mermaid').textContent.trim();
     let scale = 1;
     let panX = 0;
     let panY = 0;
@@ -318,19 +372,35 @@ ${mermaid}
     };
     document.getElementById('zoom-fit').onclick = fitToView;
 
+    document.getElementById('toggle-direction').onclick = async () => {
+      const btn = document.getElementById('toggle-direction');
+      const mermaidEl = wrapper.querySelector('.mermaid');
+      const isLR = mermaidRaw.startsWith('graph LR');
+      mermaidRaw = isLR ? mermaidRaw.replace(/^graph LR/, 'graph TD') : mermaidRaw.replace(/^graph TD/, 'graph LR');
+      btn.textContent = isLR ? 'LR' : 'TD';
+      vscode.postMessage({ type: 'directionChanged', direction: isLR ? 'TD' : 'LR' });
+      mermaidEl.removeAttribute('data-processed');
+      mermaidEl.innerHTML = mermaidRaw;
+      wrapper.classList.remove('ready');
+      scale = 1; panX = 0; panY = 0; applyTransform();
+      await mermaid.run({ nodes: [mermaidEl] });
+      requestAnimationFrame(() => { fitToView(); wrapper.classList.add('ready'); });
+    };
+
     document.getElementById('download-png').onclick = () => {
       const svg = wrapper.querySelector('svg');
       if (!svg) return;
       const svgData = new XMLSerializer().serializeToString(svg);
       const canvas = document.createElement('canvas');
-      const s = 2;
-      canvas.width = svg.clientWidth * s;
-      canvas.height = svg.clientHeight * s;
+      const s = 4;
+      const bb = svg.viewBox.baseVal;
+      const sw = bb.width || svg.clientWidth;
+      const sh = bb.height || svg.clientHeight;
+      canvas.width = sw * s;
+      canvas.height = sh * s;
       const ctx = canvas.getContext('2d');
       const img = new Image();
       img.onload = () => {
-        ctx.fillStyle = '#1e1e1e';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/png');
         vscode.postMessage({ type: 'savePng', data: dataUrl });
@@ -338,8 +408,32 @@ ${mermaid}
       img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
     };
 
-    // Auto-fit after Mermaid renders
-    setTimeout(fitToView, 500);
+    function getMermaidSource() { return mermaidRaw; }
+    const jsonSource = document.getElementById('graph-json').textContent;
+    const sourcePanel = document.getElementById('source-panel');
+    const sourceContent = document.getElementById('source-content');
+    let activeTab = 'mermaid';
+
+    document.querySelectorAll('.source-tabs button').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelector('.source-tabs .active').classList.remove('active');
+        btn.classList.add('active');
+        activeTab = btn.dataset.tab;
+        sourceContent.textContent = activeTab === 'mermaid' ? getMermaidSource() : jsonSource;
+      };
+    });
+
+    const toggleBtn = document.getElementById('toggle-source');
+    toggleBtn.onclick = () => {
+      const visible = sourcePanel.classList.toggle('visible');
+      toggleBtn.textContent = visible ? 'Diagram' : 'Source';
+      if (visible) sourceContent.textContent = activeTab === 'mermaid' ? getMermaidSource() : jsonSource;
+    };
+
+    setTimeout(() => {
+      fitToView();
+      wrapper.classList.add('ready');
+    }, 500);
   </script>
 </body>
 </html>`

@@ -42,7 +42,7 @@ function openInBrowser(filePath: string): void {
   }
 }
 
-function buildHtml(mermaid: string, title: string): string {
+function buildHtml(mermaid: string, title: string, graphJson: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -139,6 +139,40 @@ function buildHtml(mermaid: string, title: string): string {
       height: 12px;
       border-radius: 3px;
     }
+    .source-panel {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: #0f172a;
+      z-index: 10;
+      flex-direction: column;
+    }
+    .source-panel.visible { display: flex; }
+    .source-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid #1e293b;
+      flex-shrink: 0;
+    }
+    .source-tabs button {
+      background: none;
+      border: none;
+      color: #64748b;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+      border-bottom: 2px solid transparent;
+    }
+    .source-tabs button.active { color: #e2e8f0; border-bottom-color: #e2e8f0; }
+    .source-content {
+      flex: 1;
+      overflow: auto;
+      padding: 1rem;
+      font-family: monospace;
+      font-size: 0.8rem;
+      white-space: pre;
+      color: #e2e8f0;
+    }
   </style>
 </head>
 <body>
@@ -149,7 +183,9 @@ function buildHtml(mermaid: string, title: string): string {
       <span id="zoom-level">100%</span>
       <button id="zoom-in">+</button>
       <button id="zoom-fit">Fit</button>
+      <button id="toggle-direction">LR</button>
       <button id="download-png">Save PNG</button>
+      <button id="toggle-source">Source</button>
     </div>
   </header>
   <div class="diagram-container" id="container">
@@ -157,6 +193,13 @@ function buildHtml(mermaid: string, title: string): string {
       <pre class="mermaid">
 ${mermaid}
       </pre>
+    </div>
+    <div class="source-panel" id="source-panel">
+      <div class="source-tabs">
+        <button class="active" data-tab="mermaid">Mermaid</button>
+        <button data-tab="json">JSON</button>
+      </div>
+      <div class="source-content" id="source-content"></div>
     </div>
   </div>
   <footer>
@@ -171,6 +214,7 @@ ${mermaid}
     </div>
     <a href="https://github.com/gunnargrosch/durable-viz" target="_blank">github.com/gunnargrosch/durable-viz</a>
   </footer>
+  <script type="application/json" id="graph-json">${graphJson}</script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
     mermaid.initialize({
@@ -184,6 +228,7 @@ ${mermaid}
     const zoomLabel = document.getElementById('zoom-level');
     const container = document.getElementById('container');
 
+    let mermaidRaw = document.querySelector('.mermaid').textContent.trim();
     let scale = 1;
     let panX = 0;
     let panY = 0;
@@ -264,19 +309,34 @@ ${mermaid}
     };
     document.getElementById('zoom-fit').onclick = fitToView;
 
+    document.getElementById('toggle-direction').onclick = async () => {
+      const btn = document.getElementById('toggle-direction');
+      const mermaidEl = wrapper.querySelector('.mermaid');
+      const isLR = mermaidRaw.startsWith('graph LR');
+      mermaidRaw = isLR ? mermaidRaw.replace(/^graph LR/, 'graph TD') : mermaidRaw.replace(/^graph TD/, 'graph LR');
+      btn.textContent = isLR ? 'LR' : 'TD';
+      mermaidEl.removeAttribute('data-processed');
+      mermaidEl.innerHTML = mermaidRaw;
+      wrapper.classList.remove('ready');
+      scale = 1; panX = 0; panY = 0; applyTransform();
+      await mermaid.run({ nodes: [mermaidEl] });
+      requestAnimationFrame(() => { fitToView(); wrapper.classList.add('ready'); });
+    };
+
     document.getElementById('download-png').onclick = () => {
       const svg = wrapper.querySelector('svg');
       if (!svg) return;
       const svgData = new XMLSerializer().serializeToString(svg);
       const canvas = document.createElement('canvas');
-      const scale = 2;
-      canvas.width = svg.clientWidth * scale;
-      canvas.height = svg.clientHeight * scale;
+      const scale = 4;
+      const bb = svg.viewBox.baseVal;
+      const sw = bb.width || svg.clientWidth;
+      const sh = bb.height || svg.clientHeight;
+      canvas.width = sw * scale;
+      canvas.height = sh * scale;
       const ctx = canvas.getContext('2d');
       const img = new Image();
       img.onload = () => {
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         const a = document.createElement('a');
         a.download = '${title}-durable-viz.png';
@@ -284,6 +344,28 @@ ${mermaid}
         a.click();
       };
       img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+    };
+
+    function getMermaidSource() { return mermaidRaw; }
+    const jsonSource = document.getElementById('graph-json').textContent;
+    const sourcePanel = document.getElementById('source-panel');
+    const sourceContent = document.getElementById('source-content');
+    let activeTab = 'mermaid';
+
+    document.querySelectorAll('.source-tabs button').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelector('.source-tabs .active').classList.remove('active');
+        btn.classList.add('active');
+        activeTab = btn.dataset.tab;
+        sourceContent.textContent = activeTab === 'mermaid' ? getMermaidSource() : jsonSource;
+      };
+    });
+
+    const toggleBtn = document.getElementById('toggle-source');
+    toggleBtn.onclick = () => {
+      const visible = sourcePanel.classList.toggle('visible');
+      toggleBtn.textContent = visible ? 'Diagram' : 'Source';
+      if (visible) sourceContent.textContent = activeTab === 'mermaid' ? getMermaidSource() : jsonSource;
     };
 
     setTimeout(() => {
@@ -320,7 +402,7 @@ const program = new Command()
 
       if (options.open) {
         const title = options.name ?? basename(filePath, '.ts')
-        const html = buildHtml(mermaid, title)
+        const html = buildHtml(mermaid, title, JSON.stringify(graph, null, 2))
         const tmpPath = resolve(getTempDir(), `durable-viz-${Date.now()}.html`)
         writeFileSync(tmpPath, html)
         openInBrowser(tmpPath)
