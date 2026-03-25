@@ -164,18 +164,18 @@ durable-viz handler.ts --json
 
 ## Supported Primitives
 
-The parser detects all durable execution SDK primitives across all three runtimes:
+The parser detects all durable execution SDK primitives. Java SDK support is in preview with some primitives still in development.
 
-| Primitive | TypeScript | Python | Java |
+| Primitive | TypeScript | Python | Java (preview) |
 | --- | --- | --- | --- |
 | Step | `context.step()` | `context.step()` | `ctx.step()` |
 | Invoke | `context.invoke()` | `context.invoke()` | `ctx.invoke()` |
-| Parallel | `context.parallel()` | `context.parallel()` | `ctx.parallel()` |
-| Map | `context.map()` | `context.map()` | `ctx.map()` |
+| Parallel | `context.parallel()` | `context.parallel()` | *in development* |
+| Map | `context.map()` | `context.map()` | *in development* |
 | Wait | `context.wait()` | `context.wait()` | `ctx.wait()` |
-| Wait for Callback | `context.waitForCallback()` | `context.wait_for_callback()` | `ctx.waitForCallback()` |
+| Wait for Callback | `context.waitForCallback()` | `context.wait_for_callback()` | *in development* |
 | Create Callback | `context.createCallback()` | `context.create_callback()` | `ctx.createCallback()` |
-| Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | `ctx.waitForCondition()` |
+| Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | *in development* |
 | Child Context | `context.runInChildContext()` | `context.run_in_child_context()` | `ctx.runInChildContext()` |
 
 TypeScript also detects `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`.
