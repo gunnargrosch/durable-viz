@@ -48,7 +48,7 @@ graph LR
 npx durable-viz handler.ts --open
 ```
 
-This parses the handler, extracts the workflow structure, and opens an interactive diagram in your browser with scroll zoom, click-drag panning, and a dark theme.
+This parses the handler, extracts the workflow structure, and opens an interactive diagram in your browser with scroll zoom, click-drag panning, direction toggle, source view, and a dark theme.
 
 ## Usage
 

@@ -380,7 +380,7 @@ ${mermaid}
 const program = new Command()
   .name('durable-viz')
   .description('Visualize AWS Lambda Durable Functions workflows')
-  .version('0.1.2')
+  .version('0.1.3')
   .argument('<file>', 'Path to a TypeScript file containing a durable function handler')
   .option('-d, --direction <dir>', 'Graph direction: TD (top-down) or LR (left-right)', 'TD')
   .option('-n, --name <name>', 'Override the workflow name')

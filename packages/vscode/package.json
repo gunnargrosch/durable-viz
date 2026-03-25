@@ -2,7 +2,7 @@
   "name": "durable-viz",
   "displayName": "Durable Viz",
   "description": "Visualize AWS Lambda Durable Functions workflows. See your step, parallel, invoke, and callback primitives as an interactive flowchart.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "gunnargrosch",
   "license": "MIT",
   "repository": {

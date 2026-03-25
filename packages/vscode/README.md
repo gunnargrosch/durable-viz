@@ -11,6 +11,9 @@ Supports **TypeScript/JavaScript**, **Python**, and **Java** runtimes.
 - **Click-drag pan.** Click and drag to move around the diagram.
 - **Click-to-navigate.** Click any node to jump to that line in the source file.
 - **Auto-refresh.** Diagram updates when you save the file.
+- **Direction toggle.** Switch between top-down (TD) and left-right (LR) layout.
+- **Save PNG.** Export the diagram as a high-resolution transparent PNG.
+- **Source view.** View the raw Mermaid syntax or JSON graph.
 - **All primitives.** Step, invoke, parallel, map, wait, callbacks, conditions, child contexts.
 
 ## Usage
