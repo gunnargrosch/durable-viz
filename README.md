@@ -46,6 +46,8 @@ graph LR
   style node_end fill:#5b8ab4,stroke:#4a7293,color:#e8edf2
 ```
 
+Read the [blog post](https://dev.to/gunnargrosch/visualizing-aws-lambda-durable-function-workflows-with-durable-viz-1838) for a full walkthrough with examples.
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)
