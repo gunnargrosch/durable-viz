@@ -13,20 +13,26 @@ public class OrderProcessor extends DurableHandler<Order, OrderResult> {
 
     @Override
     protected OrderResult handleRequest(Order order, DurableContext ctx) {
-        // Step 1: Reserve inventory
-        var reservation = ctx.step("reserve-inventory", Reservation.class,
-            stepCtx -> inventoryService.reserve(order.getItems()));
+        // Step 1: Validate order
+        var validated = ctx.step("validate-order", Order.class,
+            stepCtx -> orderService.validate(order));
 
-        // Step 2: Process payment
-        var payment = ctx.step("process-payment", Payment.class,
-            stepCtx -> paymentService.charge(order.getPaymentMethod(), order.getTotal()));
+        // Step 2: Reserve inventory and process payment in parallel
+        var parallel = ctx.parallel("prepare");
+        parallel.branch("reserve-inventory", Reservation.class,
+            branchCtx -> branchCtx.step("reserve", Reservation.class,
+                stepCtx -> inventoryService.reserve(validated.getItems())));
+        parallel.branch("process-payment", Payment.class,
+            branchCtx -> branchCtx.step("charge", Payment.class,
+                stepCtx -> paymentService.charge(validated.getPaymentMethod(), validated.getTotal())));
+        parallel.get();
 
         // Step 3: Wait for shipping label
         ctx.wait("shipping-delay", Duration.ofMinutes(5));
 
         // Step 4: Invoke fulfillment service
         var shipment = ctx.invoke("fulfillment-service",
-            new ShipmentRequest(order.getId(), reservation.getWarehouse()),
+            new ShipmentRequest(order.getId()),
             ShipmentResult.class);
 
         // Step 5: High-value orders need manager approval

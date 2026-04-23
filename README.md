@@ -169,18 +169,18 @@ durable-viz handler.ts --json
 
 ## Supported Primitives
 
-The parser detects all durable execution SDK primitives. Java SDK support is in preview with some primitives still in development.
+The parser detects all durable execution SDK primitives.
 
-| Primitive | TypeScript | Python | Java (preview) |
+| Primitive | TypeScript | Python | Java |
 | --- | --- | --- | --- |
 | Step | `context.step()` | `context.step()` | `ctx.step()` |
 | Invoke | `context.invoke()` | `context.invoke()` | `ctx.invoke()` |
-| Parallel | `context.parallel()` | `context.parallel()` | *in development* |
-| Map | `context.map()` | `context.map()` | *in development* |
+| Parallel | `context.parallel()` | `context.parallel()` | `ctx.parallel()` |
+| Map | `context.map()` | `context.map()` | `ctx.map()` |
 | Wait | `context.wait()` | `context.wait()` | `ctx.wait()` |
-| Wait for Callback | `context.waitForCallback()` | `context.wait_for_callback()` | *in development* |
+| Wait for Callback | `context.waitForCallback()` | `context.wait_for_callback()` | `ctx.waitForCallback()` |
 | Create Callback | `context.createCallback()` | `context.create_callback()` | `ctx.createCallback()` |
-| Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | *in development* |
+| Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | `ctx.waitForCondition()` |
 | Child Context | `context.runInChildContext()` | `context.run_in_child_context()` | `ctx.runInChildContext()` |
 
 TypeScript also detects `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`.
@@ -232,7 +232,7 @@ The `examples/` directory contains sample handlers for each language:
 | --- | --- | --- |
 | `order-workflow.ts` | TypeScript | step, parallel, invoke, waitForCallback, condition |
 | `order_processor.py` | Python | step, wait, create_callback, invoke, condition |
-| `OrderProcessor.java` | Java | step, wait, invoke, waitForCallback, condition |
+| `OrderProcessor.java` | Java | step, parallel, wait, invoke, waitForCallback, condition |
 
 ```shell
 npx durable-viz examples/order-workflow.ts --open
@@ -280,7 +280,6 @@ The core package is language-agnostic above the parser layer. Adding a new langu
 - **Same-file only.** Function-reference following resolves functions defined in the same file. Imported helpers from other files are not followed.
 - **Static analysis.** The parser sees all possible paths, not a specific execution. Dynamic parallel branches (from `.map()`) show all registered targets, even if a given execution only uses a subset.
 - **Mermaid rendering.** Arrow routing for fan-in (multiple edges converging on one node) is controlled by Mermaid's layout engine. Complex workflows with many parallel branches may have overlapping edges.
-- **Java SDK preview.** The Java durable execution SDK is in preview. Some primitives (`waitForCondition`, `waitForCallback`, `parallel`, `map`) may not be available yet.
 - **Python/Java parsers are regex-based.** They handle standard patterns well but may miss unusual formatting (e.g., method calls split across many lines with comments between arguments).
 
 ## Contributing

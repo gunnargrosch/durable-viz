@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-04-23
+
+### Changed
+
+- Java SDK support upgraded from preview to GA following the [AWS Lambda Durable Execution SDK for Java general availability announcement](https://aws.amazon.com/about-aws/whats-new/2026/04/lambda-durable-execution-java-ga/)
+- Java parser now extracts parallel/map branch names from `List.of()` and `Arrays.asList()` calls
+- Updated Java example to showcase `parallel` primitive
+- Removed Java SDK preview limitation from documentation
+
 ## [0.1.3] - 2026-03-25
 
 ### Added

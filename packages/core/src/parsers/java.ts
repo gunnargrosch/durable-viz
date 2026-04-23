@@ -13,7 +13,7 @@
  *   ctx.waitForCondition()  → waitForCondition
  *   ctx.runInChildContext()  → runInChildContext
  *
- * Note: parallel() is not yet available in Java SDK (preview).
+ * The Java SDK is GA as of April 2026.
  */
 
 import { readFileSync } from 'node:fs'
@@ -219,6 +219,10 @@ function extractNodes(
           if (fnMatch) node.target = fnMatch[1]
         }
 
+        if (info.kind === 'parallel' || info.kind === 'map') {
+          node.branches = extractJavaBranches(lines, i)
+        }
+
         nodes.push(node)
         break
       }
@@ -250,6 +254,32 @@ function extractNameArg(line: string, lines: string[], lineIdx: number): string 
   // Match first string argument: ctx.method("name"
   const nameMatch = searchText.match(/\.\w+\s*\(\s*"([^"]+)"/)
   return nameMatch?.[1]
+}
+
+/**
+ * Try to extract branch names from a parallel() call.
+ * The Java SDK uses a builder pattern: ctx.parallel("name") followed by
+ * .branch("branchName", ...) calls. We scan subsequent lines for .branch() calls.
+ */
+function extractJavaBranches(lines: string[], startLine: number): WorkflowBranch[] {
+  const branches: WorkflowBranch[] = []
+  const searchText = lines.slice(startLine, startLine + 30).join('\n')
+
+  const branchPattern = /\.branch\s*\(\s*"([^"]+)"/g
+  let match
+  while ((match = branchPattern.exec(searchText)) !== null) {
+    branches.push({
+      name: match[1],
+      dynamic: false,
+      nodes: [{
+        id: nextId('step'),
+        kind: 'step',
+        label: match[1],
+      }],
+    })
+  }
+
+  return branches
 }
 
 // ---------------------------------------------------------------------------
