@@ -16,6 +16,7 @@ describe('JavaParser', () => {
     assert.ok(kinds.includes('start'))
     assert.ok(kinds.includes('end'))
     assert.ok(kinds.includes('step'))
+    assert.ok(kinds.includes('parallel'))
     assert.ok(kinds.includes('wait'))
     assert.ok(kinds.includes('invoke'))
     assert.ok(kinds.includes('waitForCallback'))
@@ -29,8 +30,7 @@ describe('JavaParser', () => {
       .filter((n) => n.kind === 'step')
       .map((n) => n.label)
 
-    assert.ok(stepLabels.includes('reserve-inventory'))
-    assert.ok(stepLabels.includes('process-payment'))
+    assert.ok(stepLabels.includes('validate-order'))
     assert.ok(stepLabels.includes('send-confirmation'))
   })
 
@@ -40,6 +40,20 @@ describe('JavaParser', () => {
     const invoke = graph.nodes.find((n) => n.kind === 'invoke')
     assert.ok(invoke)
     assert.equal(invoke.target, 'fulfillment-service')
+  })
+
+  it('extracts parallel branches', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessor.java'))
+
+    const parallel = graph.nodes.find((n) => n.kind === 'parallel')
+    assert.ok(parallel)
+    assert.equal(parallel.label, 'prepare')
+    assert.ok(parallel.branches)
+    assert.equal(parallel.branches.length, 2)
+
+    const branchNames = parallel.branches.map((b) => b.name)
+    assert.ok(branchNames.includes('reserve-inventory'))
+    assert.ok(branchNames.includes('process-payment'))
   })
 
   it('detects condition with waitForCallback', () => {
