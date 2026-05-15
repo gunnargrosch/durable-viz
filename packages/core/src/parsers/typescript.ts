@@ -85,6 +85,17 @@ function isPromiseCall(node: Node, method: string, contextNames: Set<string>): b
   return false
 }
 
+/** Check if a call is withRetry(context, ...) — a top-level helper. */
+function isWithRetryCall(node: Node, contextNames: Set<string>): boolean {
+  if (node.getKind() !== SyntaxKind.CallExpression) return false
+  const call = node as CallExpression
+  const expr = call.getExpression()
+  if (expr.getText() !== 'withRetry') return false
+  const firstArg = call.getArguments()[0]
+  if (!firstArg) return false
+  return contextNames.has(firstArg.getText())
+}
+
 /** Extract retry strategy info from options argument. */
 function getRetryStrategy(call: CallExpression): string | undefined {
   const args = call.getArguments()
@@ -543,6 +554,17 @@ function extractFromBlock(
         markDescendants(call, consumed)
         const name = getStringArg(call, 0)
         nodes.push({ id: nextId('psettled'), kind: 'promiseAllSettled', label: name ?? 'promise.allSettled', sourceLine: lineOf(call) })
+      } else if (isWithRetryCall(call, contextNames)) {
+        markDescendants(call, consumed)
+        // withRetry(context, "name", fn, config) or withRetry(context, fn, config)
+        const name = getStringArg(call, 1)
+        nodes.push({
+          id: nextId('retry'),
+          kind: 'withRetry',
+          label: name ?? 'withRetry',
+          retryStrategy: getRetryStrategy(call),
+          sourceLine: lineOf(call),
+        })
       } else {
         // --- Function-reference following ---
         // Check if this is a call to a helper function that uses DurableContext.

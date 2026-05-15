@@ -17,6 +17,7 @@ export type NodeKind =
   | 'createCallback'
   | 'waitForCondition'
   | 'runInChildContext'
+  | 'withRetry'
   | 'promiseAll'
   | 'promiseAny'
   | 'promiseRace'

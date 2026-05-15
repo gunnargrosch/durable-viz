@@ -36,6 +36,7 @@ function shapeForKind(node: WorkflowNode): string {
     case 'waitForCondition':
       return `((${label}))`
     case 'runInChildContext':
+    case 'withRetry':
       return `[[${label}]]`
     case 'condition':
       return `{${label}}`
@@ -79,6 +80,7 @@ function styleForKind(node: WorkflowNode): string | undefined {
     case 'waitForCondition':
       return `style ${node.id} fill:#b05a5a,stroke:#8f4a4a,color:#f2e0e0`
     case 'runInChildContext':
+    case 'withRetry':
       return `style ${node.id} fill:#4a849e,stroke:#3d6d83,color:#deedf3`
     case 'condition':
       return `style ${node.id} fill:#6b71a8,stroke:#575c8a,color:#e3e4f0`

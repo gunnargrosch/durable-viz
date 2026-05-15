@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-05-15
+
+### Added
+
+- `withRetry` primitive support for TypeScript and Java parsers
+  - TypeScript: detects `withRetry(context, "name", fn, config)` calls (SDK v2.0.0-alpha.1)
+  - Java: detects both `ctx.withRetry(...)` and static `withRetry(ctx, "name", ...)` calls (SDK v1.1.0)
+  - Rendered as subroutine shape with teal color (same as Child Context)
+
 ## [0.2.0] - 2026-04-23
 
 ### Changed
