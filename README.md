@@ -182,6 +182,7 @@ The parser detects all durable execution SDK primitives.
 | Create Callback | `context.createCallback()` | `context.create_callback()` | `ctx.createCallback()` |
 | Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | `ctx.waitForCondition()` |
 | Child Context | `context.runInChildContext()` | `context.run_in_child_context()` | `ctx.runInChildContext()` |
+| With Retry | `withRetry(context, ...)` | — | `withRetry(ctx, ...)` |
 
 TypeScript also detects `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`.
 
@@ -197,7 +198,7 @@ Each primitive type has a distinct shape and color in the diagram:
 | Parallel / Map | Hexagon | Purple |
 | Wait / Callback | Circle | Red |
 | Condition | Diamond | Indigo |
-| Child Context | Subroutine | Teal |
+| Child Context / With Retry | Subroutine | Teal |
 
 ## How It Works
 

@@ -49,6 +49,7 @@ const PRIMITIVES: Record<string, PrimitiveInfo> = {
   'waitForCondition': { kind: 'waitForCondition', idPrefix: 'waitcond' },
   'runInChildContext': { kind: 'runInChildContext', idPrefix: 'child' },
   'parallel': { kind: 'parallel', idPrefix: 'parallel' },
+  'withRetry': { kind: 'withRetry', idPrefix: 'retry' },
 }
 
 // ---------------------------------------------------------------------------
@@ -229,6 +230,22 @@ function extractNodes(
     }
 
     // Check for helper method calls
+    if (!matched) {
+      // Check for static withRetry(ctx, ...) call
+      const withRetryPattern = new RegExp(`withRetry\\s*\\(\\s*(${contextNames.join('|')})`)
+      if (withRetryPattern.test(line)) {
+        matched = true
+        const searchText = lines.slice(i, i + 3).join(' ')
+        const nameMatch = searchText.match(/withRetry\s*\(\s*\w+\s*,\s*"([^"]+)"/)
+        nodes.push({
+          id: nextId('retry'),
+          kind: 'withRetry',
+          label: nameMatch?.[1] ?? 'withRetry',
+          sourceLine: absLine,
+        })
+      }
+    }
+
     if (!matched) {
       for (const [methodName, helperBody] of helpers) {
         if (line.includes(`${methodName}(`) && !visited.has(methodName)) {
