@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-06-27
+
+### Added
+
+- **Build Mode (VS Code)**: Drag-and-drop visual canvas to construct workflow diagrams from durable primitives. Generates boilerplate handler code in TypeScript, Python, or Java.
+- **Code generation library** (`generateCode`): Convert any `WorkflowGraph` to TypeScript, Python, or Java handler code with proper imports, condition if/else blocks, and parallel branch scaffolding.
+
 ## [0.4.1] - 2026-06-27
 
 ### Fixed
