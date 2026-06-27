@@ -83,5 +83,5 @@ jobs:
         run: pnpm build
 
       - name: Publish VS Code extension
-        run: npx @vscode/vsce publish --pat ${{ secrets.VSCE_PAT }}
+        run: npx @vscode/vsce publish --pat ${{ secrets.VSCE_PAT }} --no-dependencies
         working-directory: packages/vscode
