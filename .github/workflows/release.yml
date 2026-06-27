@@ -56,8 +56,13 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Debug npm auth
+        run: |
+          echo "=== .npmrc ===" && cat ~/.npmrc
+          echo "=== npm whoami ===" && npm whoami --registry https://registry.npmjs.org || true
+
       - name: Publish CLI to npm
-        run: npm publish --access public
+        run: pnpm publish --access public --no-git-checks
         working-directory: packages/cli
 
   publish-vscode:
