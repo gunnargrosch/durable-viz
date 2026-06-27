@@ -40,15 +40,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
       - uses: pnpm/action-setup@v4
         with:
           version: 10
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: pnpm install
@@ -58,11 +57,12 @@ jobs:
 
       - name: Debug npm auth
         run: |
-          echo "=== USERCONFIG ===" && cat "$NPM_CONFIG_USERCONFIG"
+          echo "=== npm config list ===" && npm config list
+          echo "=== local .npmrc ===" && cat .npmrc 2>/dev/null || echo "none"
           echo "=== npm whoami ===" && npm whoami --registry https://registry.npmjs.org || true
 
       - name: Publish CLI to npm
-        run: pnpm publish --access public --no-git-checks
+        run: npm publish --access public
         working-directory: packages/cli
 
   publish-vscode:
