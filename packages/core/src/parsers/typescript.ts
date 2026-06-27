@@ -41,22 +41,15 @@ function resetIds(): void {
 // AST helpers
 // ---------------------------------------------------------------------------
 
-/** Extract a string label from a call argument. Handles string literals, template literals, property access, and identifiers. */
+/** Extract the first string literal argument from a call expression. */
 function getStringArg(call: CallExpression, index: number): string | undefined {
   const arg = call.getArguments()[index]
   if (!arg) return undefined
-  const kind = arg.getKind()
-  if (kind === SyntaxKind.StringLiteral) {
+  if (arg.getKind() === SyntaxKind.StringLiteral) {
     return arg.getText().replace(/^['"]|['"]$/g, '')
   }
-  if (kind === SyntaxKind.NoSubstitutionTemplateLiteral) {
+  if (arg.getKind() === SyntaxKind.NoSubstitutionTemplateLiteral) {
     return arg.getText().replace(/^`|`$/g, '')
-  }
-  if (kind === SyntaxKind.TemplateExpression) {
-    return arg.getText().replace(/^`|`$/g, '').replace(/\$\{[^}]*\}/g, '?')
-  }
-  if (kind === SyntaxKind.PropertyAccessExpression || kind === SyntaxKind.Identifier) {
-    return arg.getText()
   }
   return undefined
 }
@@ -446,7 +439,7 @@ function extractFromBlock(
       const conditionText = ifStmt.getExpression().getText()
 
       const thenNodes = extractFromBlock(
-        getChildStatements(thenBlock),
+        thenBlock.getDescendantStatements?.() ?? getChildStatements(thenBlock),
         contextNames,
         durableFunctions,
         visited,

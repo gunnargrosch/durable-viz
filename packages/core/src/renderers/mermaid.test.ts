@@ -60,7 +60,7 @@ describe('renderMermaid', () => {
     const graph = parseFile(resolve(examplesDir, 'order-workflow.ts'))
     const output = renderMermaid(graph)
 
-    assert.ok(output.includes('&nbsp;'), 'Edge labels should have nbsp padding')
+    assert.ok(output.includes('#nbsp;'), 'Edge labels should have nbsp padding')
   })
 
   it('does not use reserved node IDs', () => {
