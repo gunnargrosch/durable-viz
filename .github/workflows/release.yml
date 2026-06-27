@@ -58,7 +58,7 @@ jobs:
 
       - name: Debug npm auth
         run: |
-          echo "=== .npmrc ===" && cat ~/.npmrc
+          echo "=== USERCONFIG ===" && cat "$NPM_CONFIG_USERCONFIG"
           echo "=== npm whoami ===" && npm whoami --registry https://registry.npmjs.org || true
 
       - name: Publish CLI to npm
