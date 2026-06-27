@@ -36,6 +36,11 @@
         "command": "durable-viz.open",
         "title": "Durable Viz: Open Lambda Durable Function Workflow",
         "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "durable-viz.build",
+        "title": "Durable Viz: Build Workflow Diagram",
+        "icon": "$(edit)"
       }
     ],
     "menus": {

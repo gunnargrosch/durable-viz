@@ -3,6 +3,7 @@ export { TypeScriptParser } from './parsers/typescript.js'
 export { PythonParser } from './parsers/python.js'
 export { JavaParser } from './parsers/java.js'
 export { renderMermaid, type MermaidOptions } from './renderers/mermaid.js'
+export { generateCode, type CodeGenLanguage, type CodeGenOptions } from './renderers/codegen.js'
 export type {
   WorkflowGraph,
   WorkflowNode,

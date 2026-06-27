@@ -1,12 +1,13 @@
 import * as vscode from 'vscode'
 import { parseFile, renderMermaid } from '@durable-viz/core'
+import { generateCode } from '@durable-viz/core'
 
 let currentPanel: vscode.WebviewPanel | undefined
 let currentFilePath: string | undefined
 let currentDirection: 'TD' | 'LR' = 'TD'
 
 export function activate(context: vscode.ExtensionContext) {
-  const command = vscode.commands.registerCommand('durable-viz.open', () => {
+  const openCommand = vscode.commands.registerCommand('durable-viz.open', () => {
     const editor = vscode.window.activeTextEditor
     if (!editor) {
       vscode.window.showWarningMessage('Durable Viz: No active editor')
@@ -17,7 +18,11 @@ export function activate(context: vscode.ExtensionContext) {
     openPanel(context, filePath)
   })
 
-  context.subscriptions.push(command)
+  const buildCommand = vscode.commands.registerCommand('durable-viz.build', () => {
+    openBuildPanel(context)
+  })
+
+  context.subscriptions.push(openCommand, buildCommand)
 
   // Auto-refresh on save
   context.subscriptions.push(
@@ -480,3 +485,424 @@ function buildErrorHtml(message: string): string {
 }
 
 export function deactivate() {}
+
+// ---------------------------------------------------------------------------
+// Build mode (visual canvas → code generation)
+// ---------------------------------------------------------------------------
+
+let buildPanel: vscode.WebviewPanel | undefined
+
+function openBuildPanel(context: vscode.ExtensionContext) {
+  if (buildPanel) {
+    buildPanel.reveal(vscode.ViewColumn.Beside)
+    return
+  }
+
+  buildPanel = vscode.window.createWebviewPanel(
+    'durableVizBuild',
+    'Durable Viz: Build',
+    vscode.ViewColumn.Beside,
+    {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+    }
+  )
+
+  buildPanel.onDidDispose(() => {
+    buildPanel = undefined
+  })
+
+  buildPanel.webview.html = buildBuildHtml()
+
+  buildPanel.webview.onDidReceiveMessage(async (message) => {
+    if (message.type === 'generateCode') {
+      const { graphJson, language } = message
+      try {
+        const graph = JSON.parse(graphJson)
+        const code = generateCode(graph, { language })
+        const ext = language === 'python' ? '.py' : language === 'java' ? '.java' : '.ts'
+        const doc = await vscode.workspace.openTextDocument({
+          content: code,
+          language: language === 'python' ? 'python' : language === 'java' ? 'java' : 'typescript',
+        })
+        await vscode.window.showTextDocument(doc, vscode.ViewColumn.One)
+        vscode.window.showInformationMessage(`Generated ${graph.name || 'workflow'}${ext}`)
+      } catch (err) {
+        vscode.window.showErrorMessage(`Code generation failed: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+  })
+}
+
+function buildBuildHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline'; style-src 'unsafe-inline';">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--vscode-font-family, sans-serif);
+      background: var(--vscode-editor-background, #1e1e1e);
+      color: var(--vscode-editor-foreground, #d4d4d4);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .palette {
+      width: 180px;
+      border-right: 1px solid var(--vscode-panel-border, #333);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .palette-header {
+      padding: 8px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      opacity: 0.6;
+      border-bottom: 1px solid var(--vscode-panel-border, #333);
+    }
+    .palette-items {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+    }
+    .palette-item {
+      padding: 6px 8px;
+      margin-bottom: 3px;
+      border-radius: 3px;
+      cursor: grab;
+      font-size: 11px;
+      user-select: none;
+      border: 1px solid transparent;
+    }
+    .palette-item:hover { border-color: var(--vscode-focusBorder, #007acc); }
+    .palette-item .swatch {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      margin-right: 6px;
+    }
+    .palette-item.step .swatch { background: #4a8c72; }
+    .palette-item.invoke .swatch { background: #b8873a; }
+    .palette-item.parallel .swatch { background: #7b6b9e; }
+    .palette-item.condition .swatch { background: #6b71a8; }
+    .palette-item.wait .swatch { background: #b05a5a; }
+    .toolbar {
+      padding: 6px 0;
+      border-top: 1px solid var(--vscode-panel-border, #333);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px;
+    }
+    .toolbar select, .toolbar button {
+      background: var(--vscode-button-secondaryBackground, #333);
+      border: none;
+      color: var(--vscode-button-secondaryForeground, #ccc);
+      padding: 4px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 11px;
+      width: 100%;
+      text-align: center;
+    }
+    .toolbar button:hover {
+      background: var(--vscode-button-secondaryHoverBackground, #444);
+    }
+    .toolbar button.primary {
+      background: var(--vscode-button-background, #007acc);
+      color: var(--vscode-button-foreground, #fff);
+    }
+    .toolbar button.primary:hover {
+      background: var(--vscode-button-hoverBackground, #1a8ad4);
+    }
+    .canvas-area {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    #cy {
+      width: 100%;
+      height: 100%;
+    }
+    .help {
+      padding: 6px 8px;
+      font-size: 10px;
+      opacity: 0.4;
+      border-top: 1px solid var(--vscode-panel-border, #333);
+    }
+  </style>
+</head>
+<body>
+  <div class="palette">
+    <div class="palette-header">Primitives</div>
+    <div class="palette-items">
+      <div class="palette-item step" draggable="true" data-kind="step" data-label="step">🟢 Step</div>
+      <div class="palette-item invoke" draggable="true" data-kind="invoke" data-label="invoke">🟠 Invoke</div>
+      <div class="palette-item parallel" draggable="true" data-kind="parallel" data-label="parallel">🟣 Parallel</div>
+      <div class="palette-item" draggable="true" data-kind="map" data-label="map">🟣 Map</div>
+      <div class="palette-item wait" draggable="true" data-kind="wait" data-label="wait">🔴 Wait</div>
+      <div class="palette-item wait" draggable="true" data-kind="waitForCallback" data-label="callback">🔴 Callback</div>
+      <div class="palette-item wait" draggable="true" data-kind="createCallback" data-label="create-callback">🔴 Create Callback</div>
+      <div class="palette-item wait" draggable="true" data-kind="waitForCondition" data-label="poll">🔴 Poll</div>
+      <div class="palette-item condition" draggable="true" data-kind="condition" data-label="condition">🔵 Condition</div>
+      <div class="palette-item" draggable="true" data-kind="withRetry" data-label="retry">🩵 With Retry</div>
+      <div class="palette-item" draggable="true" data-kind="runInChildContext" data-label="child">🩵 Child Context</div>
+    </div>
+    <div class="help">
+      Drag primitives onto the canvas.<br>
+      Click nodes to connect them.<br>
+      Double-click to rename.<br>
+      Right-click to delete.
+    </div>
+    <div class="toolbar">
+      <select id="language">
+        <option value="typescript">TypeScript</option>
+        <option value="python">Python</option>
+        <option value="java">Java</option>
+      </select>
+      <button id="generate-btn" class="primary">Generate Code</button>
+      <button id="clear-btn">Clear Canvas</button>
+    </div>
+  </div>
+  <div class="canvas-area" id="canvas-area">
+    <div id="cy"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30/dist/cytoscape.min.js"></script>
+  <script>
+    const vscode = acquireVsCodeApi();
+
+    // --- Cytoscape setup ---
+    const cy = cytoscape({
+      container: document.getElementById('cy'),
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'background-color': '#4a8c72',
+            'label': 'data(label)',
+            'color': '#e0efe8',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'font-size': '12px',
+            'width': 80,
+            'height': 40,
+            'shape': 'round-rectangle',
+            'text-wrap': 'ellipsis',
+            'text-max-width': '80px',
+          }
+        },
+        {
+          selector: 'node[kind="invoke"]',
+          style: { 'background-color': '#b8873a', 'color': '#f5edd8', 'shape': 'trapezoid' }
+        },
+        {
+          selector: 'node[kind="parallel"], node[kind="map"]',
+          style: { 'background-color': '#7b6b9e', 'color': '#e8e3f0', 'shape': 'hexagon' }
+        },
+        {
+          selector: 'node[kind="wait"], node[kind="waitForCallback"], node[kind="createCallback"], node[kind="waitForCondition"]',
+          style: { 'background-color': '#b05a5a', 'color': '#f2e0e0', 'shape': 'ellipse' }
+        },
+        {
+          selector: 'node[kind="condition"]',
+          style: { 'background-color': '#6b71a8', 'color': '#e3e4f0', 'shape': 'diamond' }
+        },
+        {
+          selector: 'node[kind="runInChildContext"], node[kind="withRetry"]',
+          style: { 'background-color': '#4a849e', 'color': '#deedf3', 'shape': 'round-rectangle' }
+        },
+        {
+          selector: 'edge',
+          style: {
+            'width': 2,
+            'line-color': '#555',
+            'target-arrow-color': '#555',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier',
+            'label': 'data(label)',
+            'font-size': '10px',
+            'color': '#888',
+          }
+        }
+      ],
+      layout: { name: 'grid', rows: 1 },
+    });
+
+    // --- Drag from palette ---
+    let nodeCounter = 0;
+
+    document.querySelectorAll('.palette-item').forEach(item => {
+      item.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', JSON.stringify({
+          kind: item.dataset.kind,
+          label: item.dataset.label,
+        }));
+      });
+    });
+
+    const canvasArea = document.getElementById('canvas-area');
+    canvasArea.addEventListener('dragover', (e) => { e.preventDefault(); });
+    canvasArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      const rect = canvasArea.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      addNode(data.kind, data.label, x, y);
+    });
+
+    function addNode(kind, label, x, y) {
+      nodeCounter++;
+      const id = kind + '_' + nodeCounter;
+      cy.add({
+        group: 'nodes',
+        data: { id, kind, label },
+        position: { x, y },
+      });
+    }
+
+    // --- Edge creation (click node to start connecting, click another to finish) ---
+    let connectSource = null;
+
+    cy.on('tap', 'node', (evt) => {
+      const node = evt.target;
+      if (connectSource && connectSource !== node) {
+        cy.add({
+          group: 'edges',
+          data: { source: connectSource.id(), target: node.id() },
+        });
+        connectSource.style('border-width', 0);
+        connectSource = null;
+      } else {
+        if (connectSource) connectSource.style('border-width', 0);
+        connectSource = node;
+        node.style({ 'border-width': 2, 'border-color': '#007acc', 'border-style': 'solid' });
+      }
+    });
+
+    cy.on('tap', (evt) => {
+      if (evt.target === cy && connectSource) {
+        connectSource.style('border-width', 0);
+        connectSource = null;
+      }
+    });
+
+    // --- Double-click to rename ---
+    cy.on('dblclick', 'node', (evt) => {
+      const node = evt.target;
+      const newLabel = prompt('Node label:', node.data('label'));
+      if (newLabel) node.data('label', newLabel);
+    });
+
+    // --- Right-click to delete ---
+    cy.on('cxttap', 'node', (evt) => {
+      evt.target.remove();
+    });
+    cy.on('cxttap', 'edge', (evt) => {
+      evt.target.remove();
+    });
+
+    // --- Prevent right-click menu ---
+    cy.on('cxttap', (e) => {
+      if (e.target === cy) e.originalEvent.preventDefault();
+    });
+
+    // --- Toolbar actions ---
+    document.getElementById('clear-btn').onclick = () => {
+      cy.elements().remove();
+      nodeCounter = 0;
+    };
+
+    document.getElementById('generate-btn').onclick = () => {
+      const graph = cyToWorkflowGraph();
+      const language = document.getElementById('language').value;
+      vscode.postMessage({
+        type: 'generateCode',
+        graphJson: JSON.stringify(graph),
+        language,
+      });
+    };
+
+    // --- Convert Cytoscape graph to WorkflowGraph ---
+    function cyToWorkflowGraph() {
+      const nodes = [];
+      const nodeMap = new Map();
+
+      // Find source node (no incoming edges)
+      cy.nodes().forEach(n => {
+        const id = n.data('id');
+        const kind = n.data('kind');
+        const label = n.data('label');
+
+        if (kind === 'condition') {
+          nodeMap.set(id, {
+            id, kind, label,
+            condition: label,
+            thenCount: 1,
+            thenReturns: false,
+          });
+        } else if (kind === 'parallel' || kind === 'map') {
+          nodeMap.set(id, {
+            id, kind, label,
+            branches: [],
+          });
+        } else {
+          nodeMap.set(id, { id, kind, label });
+        }
+      });
+
+      cy.edges().forEach(e => {
+        const src = e.data('source');
+        const tgt = e.data('target');
+        if (nodeMap.has(src) && nodeMap.has(tgt)) {
+          nodeMap.get(src).target = nodeMap.get(tgt).label;
+        }
+      });
+
+      // Topological order
+      const inDegree = new Map();
+      const adj = new Map();
+      nodeMap.forEach((_, id) => { inDegree.set(id, 0); adj.set(id, []); });
+      cy.edges().forEach(e => {
+        adj.get(e.data('source')).push(e.data('target'));
+        inDegree.set(e.data('target'), (inDegree.get(e.data('target')) || 0) + 1);
+      });
+
+      const queue = [];
+      inDegree.forEach((deg, id) => { if (deg === 0) queue.push(id); });
+      const ordered = [];
+      while (queue.length > 0) {
+        const u = queue.shift();
+        ordered.push(u);
+        (adj.get(u) || []).forEach(v => {
+          inDegree.set(v, inDegree.get(v) - 1);
+          if (inDegree.get(v) === 0) queue.push(v);
+        });
+      }
+
+      ordered.forEach(id => {
+        if (nodeMap.has(id)) nodes.push(nodeMap.get(id));
+      });
+
+      return {
+        name: 'workflow',
+        nodes: [
+          { id: 'node_start', kind: 'start', label: 'Start' },
+          ...nodes,
+          { id: 'node_end', kind: 'end', label: 'End' },
+        ],
+        edges: [],
+      };
+    }
+  </script>
+</body>
+</html>`
+}
