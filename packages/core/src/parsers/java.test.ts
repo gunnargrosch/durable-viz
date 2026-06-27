@@ -93,4 +93,67 @@ describe('JavaParser', () => {
       /No DurableHandler/
     )
   })
+
+  it('detects DurableFuture.allOf', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessorFutures.java'))
+
+    const allOf = graph.nodes.find((n) => n.kind === 'promiseAll')
+    assert.ok(allOf, 'Should detect DurableFuture.allOf')
+  })
+
+  it('detects DurableFuture.anyOf', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessorFutures.java'))
+
+    const anyOf = graph.nodes.find((n) => n.kind === 'promiseAny')
+    assert.ok(anyOf, 'Should detect DurableFuture.anyOf')
+  })
+
+  it('extracts stepSemantics from StepConfig', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessorFutures.java'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step' && n.label === 'validate-order')
+    assert.ok(step, 'Should find validate-order step')
+    assert.equal(step.stepSemantics, 'AT MOST ONCE PER RETRY')
+  })
+
+  it('extracts nestingType from parallel config', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessorFutures.java'))
+
+    const parallel = graph.nodes.find((n) => n.kind === 'parallel')
+    assert.ok(parallel, 'Should find parallel node')
+    assert.equal(parallel.nestingType, 'FLAT')
+  })
+
+  it('extracts completionConfig from parallel config', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessorFutures.java'))
+
+    const parallel = graph.nodes.find((n) => n.kind === 'parallel')
+    assert.ok(parallel, 'Should find parallel node')
+    assert.equal(parallel.completionConfig, 'first successful')
+  })
+
+  it('extracts tenantId from invoke config', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessorFutures.java'))
+
+    const invoke = graph.nodes.find((n) => n.kind === 'invoke' && n.target === 'fulfillment-service')
+    assert.ok(invoke, 'Should find invoke node')
+    assert.equal(invoke.tenantId, 'tenant-abc-123')
+  })
+
+  it('extracts nestingType from map config', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessorFutures.java'))
+
+    const map = graph.nodes.find((n) => n.kind === 'map')
+    assert.ok(map, 'Should find map node')
+    assert.equal(map.nestingType, 'FLAT')
+    assert.equal(map.completionConfig, 'all completed')
+  })
+
+  it('extracts nestingType from runInChildContext with isVirtual', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessorFutures.java'))
+
+    const child = graph.nodes.find((n) => n.kind === 'runInChildContext' && n.label === 'isolated-logic')
+    assert.ok(child, 'Should find runInChildContext node')
+    assert.equal(child.nestingType, 'FLAT')
+  })
 })

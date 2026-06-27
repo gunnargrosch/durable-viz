@@ -106,4 +106,61 @@ describe('TypeScriptParser', () => {
       /No withDurableExecution/
     )
   })
+
+  it('detects stepSemantics from StepConfig', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order-workflow-config.ts'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step' && n.label === 'validate-order')
+    assert.ok(step, 'Should find validate-order step')
+    assert.equal(step.stepSemantics, 'AtMostOncePerRetry')
+  })
+
+  it('detects nestingType on parallel node', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order-workflow-config.ts'))
+
+    const parallel = graph.nodes.find((n) => n.kind === 'parallel')
+    assert.ok(parallel, 'Should find parallel node')
+    assert.equal(parallel.nestingType, 'FLAT')
+  })
+
+  it('detects completionConfig on parallel node', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order-workflow-config.ts'))
+
+    const parallel = graph.nodes.find((n) => n.kind === 'parallel')
+    assert.ok(parallel, 'Should find parallel node')
+    assert.equal(parallel.completionConfig, 'first successful')
+  })
+
+  it('detects nestingType on map node', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order-workflow-config.ts'))
+
+    const map = graph.nodes.find((n) => n.kind === 'map')
+    assert.ok(map, 'Should find map node')
+    assert.equal(map.nestingType, 'FLAT')
+    assert.equal(map.completionConfig, 'all completed')
+  })
+
+  it('detects tenantId on invoke node', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order-workflow-config.ts'))
+
+    const invoke = graph.nodes.find((n) => n.kind === 'invoke' && n.target === 'fulfillment-service')
+    assert.ok(invoke, 'Should find invoke node')
+    assert.equal(invoke.tenantId, 'tenant-abc-123')
+  })
+
+  it('detects nestingType on runInChildContext with isVirtual', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order-workflow-config.ts'))
+
+    const child = graph.nodes.find((n) => n.kind === 'runInChildContext' && n.label === 'isolated-logic')
+    assert.ok(child, 'Should find runInChildContext node')
+    assert.equal(child.nestingType, 'FLAT')
+  })
+
+  it('detects nestingType on withRetry with virtualContext', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order-workflow-config.ts'))
+
+    const retry = graph.nodes.find((n) => n.kind === 'withRetry')
+    assert.ok(retry, 'Should find withRetry node')
+    assert.equal(retry.nestingType, 'FLAT')
+  })
 })

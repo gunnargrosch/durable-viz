@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-06-27
+
+### Added
+
+- **Python `with_retry` support.** Detects `with_retry(context, func, config, name?)` standalone function calls (SDK v1.6.0). Previously only supported for TypeScript and Java.
+- **Java `DurableFuture.allOf()` / `DurableFuture.anyOf()` support.** Detects static `DurableFuture.allOf(futures...)` and `DurableFuture.anyOf(futures...)` calls, rendered as promise combinator nodes (same as TypeScript `context.promise.all()` / `context.promise.any()`).
+- **Config-level feature extraction** across all three languages:
+  - `nestingType` / `NestingType.FLAT` on parallel, map, runInChildContext, and withRetry nodes
+  - `completionConfig` / completion rules (firstSuccessful, allCompleted, etc.) on parallel and map nodes
+  - `stepSemantics` / `StepSemantics.AT_MOST_ONCE_PER_RETRY` on step nodes
+  - `tenantId` on invoke nodes (multi-tenant isolation)
+- Config annotations displayed in Mermaid node labels (e.g. `flat`, `first successful`, `AtMostOncePerRetry`, `tenant tenant-abc-123`)
+- New example files exercising all new features: `order_processor_with_retry.py`, `OrderProcessorFutures.java`, `order-workflow-config.ts`
+
+### Changed
+
+- Updated supported primitives table in README with full three-language parity status
+- Mermaid renderer now appends config annotations below node labels using `<br>` separators
+
 ## [0.3.0] - 2026-05-15
 
 ### Added

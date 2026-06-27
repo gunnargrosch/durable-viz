@@ -218,10 +218,25 @@ function extractNodes(
         if (info.kind === 'invoke') {
           const fnMatch = line.match(/invoke\s*\(\s*"([^"]+)"/)
           if (fnMatch) node.target = fnMatch[1]
+          const config = extractJavaConfig(lines, i)
+          if (config.tenantId) node.tenantId = config.tenantId
         }
 
         if (info.kind === 'parallel' || info.kind === 'map') {
           node.branches = extractJavaBranches(lines, i)
+          const config = extractJavaConfig(lines, i)
+          if (config.nestingType) node.nestingType = config.nestingType
+          if (config.completionConfig) node.completionConfig = config.completionConfig
+        }
+
+        if (info.kind === 'runInChildContext') {
+          const config = extractJavaConfig(lines, i)
+          if (config.nestingType) node.nestingType = config.nestingType
+        }
+
+        if (info.kind === 'step') {
+          const config = extractJavaConfig(lines, i)
+          if (config.stepSemantics) node.stepSemantics = config.stepSemantics
         }
 
         nodes.push(node)
@@ -235,12 +250,41 @@ function extractNodes(
       const withRetryPattern = new RegExp(`withRetry\\s*\\(\\s*(${contextNames.join('|')})`)
       if (withRetryPattern.test(line)) {
         matched = true
-        const searchText = lines.slice(i, i + 3).join(' ')
+        const searchText = lines.slice(i, i + 5).join(' ')
         const nameMatch = searchText.match(/withRetry\s*\(\s*\w+\s*,\s*"([^"]+)"/)
+        const config = extractJavaConfig(lines, i)
         nodes.push({
           id: nextId('retry'),
           kind: 'withRetry',
           label: nameMatch?.[1] ?? 'withRetry',
+          nestingType: config.nestingType,
+          sourceLine: absLine,
+        })
+      }
+    }
+
+    // Check for DurableFuture.allOf / anyOf static calls
+    if (!matched) {
+      const allOfPattern = /DurableFuture\.allOf\s*\(/
+      if (allOfPattern.test(line)) {
+        matched = true
+        nodes.push({
+          id: nextId('pall'),
+          kind: 'promiseAll',
+          label: 'allOf',
+          sourceLine: absLine,
+        })
+      }
+    }
+
+    if (!matched) {
+      const anyOfPattern = /DurableFuture\.anyOf\s*\(/
+      if (anyOfPattern.test(line)) {
+        matched = true
+        nodes.push({
+          id: nextId('pany'),
+          kind: 'promiseAny',
+          label: 'anyOf',
           sourceLine: absLine,
         })
       }
@@ -271,6 +315,38 @@ function extractNameArg(line: string, lines: string[], lineIdx: number): string 
   // Match first string argument: ctx.method("name"
   const nameMatch = searchText.match(/\.\w+\s*\(\s*"([^"]+)"/)
   return nameMatch?.[1]
+}
+
+/**
+ * Extract config-level flags from a Java durable call's surrounding lines.
+ */
+interface JavaConfigFlags {
+  nestingType?: string
+  completionConfig?: string
+  stepSemantics?: string
+  tenantId?: string
+}
+
+function extractJavaConfig(lines: string[], lineIdx: number): JavaConfigFlags {
+  const flags: JavaConfigFlags = {}
+  const searchText = lines.slice(lineIdx, lineIdx + 15).join(' ')
+
+  const nesting = searchText.match(/\.nestingType\s*\(\s*NestingType\.(\w+)\s*\)/)
+    ?? searchText.match(/\.isVirtual\s*\(\s*true\s*\)/)
+  if (nesting) {
+    flags.nestingType = nesting[1] ?? 'FLAT'
+  }
+
+  const completion = searchText.match(/\.completionConfig\s*\(\s*CompletionConfig\.(\w+)\(\s*\)/)
+  if (completion) flags.completionConfig = completion[1].replace(/([A-Z])/g, ' $1').toLowerCase().trim()
+
+  const semantics = searchText.match(/\.semanticsPerRetry\s*\(\s*StepSemantics\.(\w+)\s*\)/)
+  if (semantics) flags.stepSemantics = semantics[1].replace(/_/g, ' ')
+
+  const tenant = searchText.match(/\.tenantId\s*\(\s*"([^"]+)"\s*\)/)
+  if (tenant) flags.tenantId = tenant[1]
+
+  return flags
 }
 
 /**

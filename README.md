@@ -1,7 +1,7 @@
 # durable-viz
 
 [![npm](https://img.shields.io/npm/v/durable-viz)](https://www.npmjs.com/package/durable-viz)
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/gunnargrosch.durable-viz?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=gunnargrosch.durable-viz)
+[![VS Code Marketplace](https://vsmarketplacebadges.dev/version/gunnargrosch.durable-viz)](https://marketplace.visualstudio.com/items?itemName=gunnargrosch.durable-viz)
 [![CI](https://github.com/gunnargrosch/durable-viz/actions/workflows/ci.yml/badge.svg)](https://github.com/gunnargrosch/durable-viz/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A520-green)](https://nodejs.org/)
@@ -76,12 +76,15 @@ Try the included examples:
 ```shell
 # TypeScript
 npx durable-viz examples/order-workflow.ts --open
+npx durable-viz examples/order-workflow-config.ts --open
 
 # Python
 npx durable-viz examples/order_processor.py --open
+npx durable-viz examples/order_processor_with_retry.py --open
 
 # Java
 npx durable-viz examples/OrderProcessor.java --open
+npx durable-viz examples/OrderProcessorFutures.java --open
 ```
 
 ## VS Code Extension
@@ -182,9 +185,22 @@ The parser detects all durable execution SDK primitives.
 | Create Callback | `context.createCallback()` | `context.create_callback()` | `ctx.createCallback()` |
 | Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | `ctx.waitForCondition()` |
 | Child Context | `context.runInChildContext()` | `context.run_in_child_context()` | `ctx.runInChildContext()` |
-| With Retry | `withRetry(context, ...)` | — | `withRetry(ctx, ...)` |
+| With Retry | `withRetry(context, ...)` | `with_retry(context, ...)` | `withRetry(ctx, ...)` |
 
 TypeScript also detects `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`.
+
+Java also detects `DurableFuture.allOf(futures...)` and `DurableFuture.anyOf(futures...)` as promise combinators.
+
+### Config-Level Features
+
+The parser extracts configuration metadata and displays it as annotations on diagram nodes:
+
+| Feature | TypeScript | Python | Java |
+| --- | :---: | :---: | :---: |
+| Nesting type (`FLAT`/`NESTED`) | ✓ | ✓ | ✓ |
+| Completion config | ✓ | ✓ | ✓ |
+| Step semantics (`AtMostOncePerRetry`) | ✓ | ✓ | ✓ |
+| Tenant isolation (`tenantId`) | ✓ | ✓ | ✓ |
 
 ### Visual Encoding
 
@@ -195,10 +211,12 @@ Each primitive type has a distinct shape and color in the diagram:
 | Start / End | Stadium | Blue |
 | Step | Rectangle | Green |
 | Invoke | Trapezoid | Amber |
-| Parallel / Map | Hexagon | Purple |
+| Parallel / Map / Promise Combinators | Hexagon | Purple |
 | Wait / Callback | Circle | Red |
 | Condition | Diamond | Indigo |
 | Child Context / With Retry | Subroutine | Teal |
+
+Config-level details (nesting type, completion rules, step semantics, tenant isolation) are shown as annotations below the node label.
 
 ## How It Works
 
@@ -215,11 +233,11 @@ Uses [ts-morph](https://github.com/dsherret/ts-morph) to parse the AST. Finds `w
 
 ### Python
 
-Regex-based parser. Finds `@durable_execution` decorated handlers and extracts `context.<method>()` calls with their `name=` keyword arguments.
+Regex-based parser. Finds `@durable_execution` decorated handlers and extracts `context.<method>()` calls with their `name=` keyword arguments. Also detects the standalone `with_retry()` function and extracts config-level metadata (nesting type, completion config, step semantics, tenant isolation) from both keyword arguments and dict-style configs.
 
 ### Java
 
-Regex-based parser. Finds classes extending `DurableHandler` and extracts `ctx.<method>()` calls from the `handleRequest` method with their string literal names.
+Regex-based parser. Finds classes extending `DurableHandler` and extracts `ctx.<method>()` calls from the `handleRequest` method with their string literal names. Detects `DurableFuture.allOf()` and `DurableFuture.anyOf()` static calls as promise combinators, and extracts config-level metadata from builder-pattern configs (nesting type, completion config, step semantics, tenant isolation).
 
 ### Conditionals
 
@@ -232,8 +250,11 @@ The `examples/` directory contains sample handlers for each language:
 | File | Language | Primitives |
 | --- | --- | --- |
 | `order-workflow.ts` | TypeScript | step, parallel, invoke, waitForCallback, condition |
+| `order-workflow-config.ts` | TypeScript | step, parallel, map, invoke, runInChildContext, withRetry, config features |
 | `order_processor.py` | Python | step, wait, create_callback, invoke, condition |
+| `order_processor_with_retry.py` | Python | step, parallel, map, invoke, withRetry, config features |
 | `OrderProcessor.java` | Java | step, parallel, wait, invoke, waitForCallback, condition |
+| `OrderProcessorFutures.java` | Java | step, parallel, map, invoke, runInChildContext, withRetry, allOf, anyOf, config features |
 
 ```shell
 npx durable-viz examples/order-workflow.ts --open

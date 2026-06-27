@@ -42,6 +42,14 @@ export interface WorkflowNode {
   retryStrategy?: string
   /** Timeout config if present. */
   timeout?: string
+  /** Nesting type for parallel/map/runInChildContext/withRetry nodes: "FLAT" or "NESTED". */
+  nestingType?: string
+  /** Completion config for parallel/map nodes (e.g. "firstSuccessful", "minSuccessful:3"). */
+  completionConfig?: string
+  /** Step semantics for step nodes: "AtMostOncePerRetry" or undefined for AtLeastOncePerRetry. */
+  stepSemantics?: string
+  /** Tenant ID for multi-tenant invoke operations. */
+  tenantId?: string
   /** Source line number (1-based) where this primitive appears. */
   sourceLine?: number
 }

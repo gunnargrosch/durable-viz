@@ -48,6 +48,7 @@ const PRIMITIVES: Record<string, PrimitiveInfo> = {
   'create_callback': { kind: 'createCallback', idPrefix: 'createcb' },
   'wait_for_condition': { kind: 'waitForCondition', idPrefix: 'waitcond' },
   'run_in_child_context': { kind: 'runInChildContext', idPrefix: 'child' },
+  'with_retry': { kind: 'withRetry', idPrefix: 'retry' },
 }
 
 // ---------------------------------------------------------------------------
@@ -239,10 +240,25 @@ function extractNodes(
           const fnMatch = line.match(/function_name\s*=\s*["']([^"']+)["']/)
             ?? line.match(/invoke\s*\(\s*["']([^"']+)["']/)
           if (fnMatch) node.target = fnMatch[1]
+          const tenantMatch = extractPythonConfig(lines, i).tenantId
+          if (tenantMatch) node.tenantId = tenantMatch
         }
 
         if (info.kind === 'parallel' || info.kind === 'map') {
           node.branches = extractPythonBranches(lines, i)
+          const config = extractPythonConfig(lines, i)
+          if (config.nestingType) node.nestingType = config.nestingType
+          if (config.completionConfig) node.completionConfig = config.completionConfig
+        }
+
+        if (info.kind === 'runInChildContext') {
+          const config = extractPythonConfig(lines, i)
+          if (config.nestingType) node.nestingType = config.nestingType
+        }
+
+        if (info.kind === 'step') {
+          const config = extractPythonConfig(lines, i)
+          if (config.stepSemantics) node.stepSemantics = config.stepSemantics
         }
 
         nodes.push(node)
@@ -251,6 +267,24 @@ function extractNodes(
     }
 
     // Check for helper function calls (only if no primitive matched)
+    if (!matched) {
+      // Check for standalone with_retry(context, ...) call
+      const multiLineText = lines.slice(i, i + 10).join(' ')
+      const withRetryPattern = new RegExp(`with_retry\\s*\\(\\s*(${contextNames.join('|')})`)
+      if (withRetryPattern.test(multiLineText) && line.startsWith('with_retry')) {
+        matched = true
+        const nameMatch = multiLineText.match(/with_retry\s*\([\s\S]*?name\s*=\s*["']([^"']+)["']/)
+        const config = extractPythonConfig(lines, i)
+        nodes.push({
+          id: nextId('retry'),
+          kind: 'withRetry',
+          label: nameMatch?.[1] ?? 'with_retry',
+          nestingType: config.nestingType,
+          sourceLine: absLine,
+        })
+      }
+    }
+
     if (!matched) {
       for (const [funcName, helperBody] of helpers) {
         if (line.includes(`${funcName}(`) && !visited.has(funcName)) {
@@ -275,6 +309,35 @@ function extractNameArg(line: string, lines: string[], lineIdx: number): string 
   const searchText = lines.slice(lineIdx, lineIdx + 5).join(' ')
   const nameMatch = searchText.match(/name\s*=\s*["']([^"']+)["']/)
   return nameMatch?.[1]
+}
+
+/**
+ * Extract config-level flags from a Python durable call's surrounding lines.
+ */
+interface PythonConfigFlags {
+  nestingType?: string
+  completionConfig?: string
+  stepSemantics?: string
+  tenantId?: string
+}
+
+function extractPythonConfig(lines: string[], lineIdx: number): PythonConfigFlags {
+  const flags: PythonConfigFlags = {}
+  const searchText = lines.slice(lineIdx, lineIdx + 10).join(' ')
+
+  const nesting = searchText.match(/["']?\s*nesting_type\s*["']?\s*[=:]\s*NestingType\.(\w+)/)
+  if (nesting) flags.nestingType = nesting[1]
+
+  const completion = searchText.match(/["']?\s*completion_config\s*["']?\s*[=:]\s*CompletionConfig\.(\w+)\(/)
+  if (completion) flags.completionConfig = completion[1].replace(/_/g, ' ')
+
+  const semantics = searchText.match(/["']?\s*step_semantics\s*["']?\s*[=:]\s*StepSemantics\.(\w+)/)
+  if (semantics) flags.stepSemantics = semantics[1].replace(/_/g, ' ').replace(/AT MOST ONCE PER RETRY/i, 'AtMostOncePerRetry').replace(/AT LEAST ONCE PER RETRY/i, 'AtLeastOncePerRetry')
+
+  const tenant = searchText.match(/["']?\s*tenant_id\s*["']?\s*[=:]\s*["']([^"']+)["']/)
+  if (tenant) flags.tenantId = tenant[1]
+
+  return flags
 }
 
 /**
