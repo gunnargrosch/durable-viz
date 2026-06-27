@@ -303,7 +303,7 @@ function extractNodes(
 
 /**
  * Extract the name= keyword argument from a Python call.
- * Falls back to extracting the function name from the first positional argument.
+ * Priority: string name= > variable name= > function reference.
  */
 function extractNameArg(line: string, lines: string[], lineIdx: number): string | undefined {
   // Build the full call text by matching parentheses from this line
@@ -311,10 +311,10 @@ function extractNameArg(line: string, lines: string[], lineIdx: number): string 
   // Explicit name= string literal is most reliable
   const strMatch = callText.match(/name\s*=\s*["']([^"']+?)["']/)
   if (strMatch) return strMatch[1]
-  // Function reference from first positional arg: context.step(func_name(...))
+  // Function reference from first positional arg (more descriptive than unresolved variable)
   const fnMatch = callText.match(/\.\w+\s*\(\s*(\w+)\s*\(/)
   if (fnMatch) return fnMatch[1]
-  // Last resort: variable-based name= argument (name=comp_name)
+  // Variable-based name= as last resort (name=comp_name)
   const varMatch = callText.match(/name\s*=\s*(\w+?)\s*[,)]/)
   if (varMatch) return varMatch[1]
   return undefined

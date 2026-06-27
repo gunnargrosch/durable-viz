@@ -5,6 +5,7 @@ import { JavaParser } from './java.js'
 
 const parser = new JavaParser()
 const examplesDir = resolve(import.meta.dirname, '../../../..', 'examples')
+const fixturesDir = resolve(import.meta.dirname, '../../../..', 'packages/core/test-fixtures')
 
 describe('JavaParser', () => {
   it('parses the OrderProcessor example', () => {
@@ -155,5 +156,37 @@ describe('JavaParser', () => {
     const child = graph.nodes.find((n) => n.kind === 'runInChildContext' && n.label === 'isolated-logic')
     assert.ok(child, 'Should find runInChildContext node')
     assert.equal(child.nestingType, 'FLAT')
+  })
+
+  it('extracts step name from dotted identifier (comp.name)', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'DynamicNames.java'))
+    const labels = graph.nodes.map((n) => n.label)
+    assert.ok(labels.includes('comp.name'), 'Should extract dotted identifier comp.name')
+  })
+
+  it('extracts step name from function call (getName())', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'DynamicNames.java'))
+    const labels = graph.nodes.map((n) => n.label)
+    assert.ok(labels.includes('getCompName'), 'Should extract function name getCompName')
+  })
+
+  it('extracts step name from variable reference', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'DynamicNames.java'))
+    const labels = graph.nodes.map((n) => n.label)
+    assert.ok(labels.includes('compName'), 'Should extract variable compName')
+  })
+
+  it('extracts step names from multi-line calls', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'DynamicNames.java'))
+    const labels = graph.nodes.map((n) => n.label)
+    assert.ok(labels.includes('multi-line-name'), 'Should extract name from multi-line call')
+  })
+
+  it('parses files with nested generics in class declaration', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'NestedGenerics.java'))
+    const labels = graph.nodes.map((n) => n.label)
+    assert.ok(labels.includes('nested-generics-step'), 'Should parse nested generics file')
+    const kinds = graph.nodes.map((n) => n.kind)
+    assert.ok(kinds.includes('step'))
   })
 })

@@ -2,9 +2,11 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { resolve } from 'node:path'
 import { TypeScriptParser } from './typescript.js'
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 
 const parser = new TypeScriptParser()
 const examplesDir = resolve(import.meta.dirname, '../../../..', 'examples')
+const fixturesDir = resolve(import.meta.dirname, '../../../..', 'packages/core/test-fixtures')
 
 describe('TypeScriptParser', () => {
   it('parses the order workflow example', () => {
@@ -162,5 +164,41 @@ describe('TypeScriptParser', () => {
     const retry = graph.nodes.find((n) => n.kind === 'withRetry')
     assert.ok(retry, 'Should find withRetry node')
     assert.equal(retry.nestingType, 'FLAT')
+  })
+
+  it('extracts step names from PropertyAccessExpression (obj.name)', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'dynamic-names.ts'))
+    const labels = graph.nodes.map((n) => n.label)
+    assert.ok(labels.includes('obj.name'), 'Should extract obj.name')
+  })
+
+  it('extracts step names from Identifier (variable)', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'dynamic-names.ts'))
+    const labels = graph.nodes.map((n) => n.label)
+    assert.ok(labels.includes('STEP_NAME'), 'Should extract STEP_NAME const')
+    assert.ok(labels.includes('varName'), 'Should extract varName variable')
+  })
+
+  it('extracts step names from TemplateExpression', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'dynamic-names.ts'))
+    const labels = graph.nodes.map((n) => n.label)
+    assert.ok(labels.includes('template-?'), 'Should extract template with ? placeholder')
+  })
+
+  it('extracts step names from CallExpression (function ref)', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'dynamic-names.ts'))
+    const labels = graph.nodes.map((n) => n.label)
+    assert.ok(labels.includes('getStepName'), 'Should extract function name')
+  })
+
+  it('prevents duplicate nodes from try/catch inside if-block', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'no-duplicates.ts'))
+    const condition = graph.nodes.find((n) => n.kind === 'condition')
+    assert.ok(condition, 'Should have condition node')
+    assert.equal(condition.thenCount, 3, 'Should have 3 nodes, not 6 (no duplicates)')
+    const labels = graph.nodes.map((n) => n.label)
+    assert.equal(labels.filter((l) => l === 'callback-ok').length, 1, 'Should have exactly one callback-ok')
+    assert.equal(labels.filter((l) => l === 'finalize-ok').length, 1, 'Should have exactly one finalize-ok')
+    assert.equal(labels.filter((l) => l === 'finalize-err').length, 1, 'Should have exactly one finalize-err')
   })
 })
