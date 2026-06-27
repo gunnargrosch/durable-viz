@@ -25,7 +25,8 @@
   },
   "files": [
     "dist/bin.cjs",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "esbuild src/bin.ts --bundle --outfile=dist/bin.cjs --format=cjs --platform=node --banner:js='#!/usr/bin/env node'"

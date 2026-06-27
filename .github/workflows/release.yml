@@ -55,12 +55,6 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Debug npm auth
-        run: |
-          echo "=== npm config list ===" && npm config list
-          echo "=== local .npmrc ===" && cat .npmrc 2>/dev/null || echo "none"
-          echo "=== npm whoami ===" && npm whoami --registry https://registry.npmjs.org || true
-
       - name: Publish CLI to npm
         run: npm publish --access public
         working-directory: packages/cli
