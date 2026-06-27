@@ -10,7 +10,7 @@ export interface MermaidOptions {
 
 /** Escape text for use inside Mermaid node labels. */
 function esc(text: string): string {
-  return text.replace(/"/g, "'").replace(/[[\]{}()<>]/g, ' ')
+  return text.replace(/"/g, "'").replace(/[[\]{}()<>|]/g, ' ')
 }
 
 function buildAnnotation(node: WorkflowNode): string {
