@@ -71,4 +71,31 @@ describe('renderMermaid', () => {
     assert.ok(!nodeIds.includes('start'), 'Should not use reserved ID "start"')
     assert.ok(!nodeIds.includes('end'), 'Should not use reserved ID "end"')
   })
+
+  it('includes config annotations in labels for TypeScript', () => {
+    const graph = parseFile(resolve(examplesDir, 'order-workflow-config.ts'))
+    const output = renderMermaid(graph)
+
+    assert.ok(output.includes('flat'), 'Should show FLAT nesting annotation')
+    assert.ok(output.includes('first successful'), 'Should show completion config annotation')
+    assert.ok(output.includes('AtMostOncePerRetry'), 'Should show step semantics annotation')
+    assert.ok(output.includes('tenant tenant-abc-123'), 'Should show tenant ID annotation')
+  })
+
+  it('includes config annotations in labels for Python', () => {
+    const graph = parseFile(resolve(examplesDir, 'order_processor_with_retry.py'))
+    const output = renderMermaid(graph)
+
+    assert.ok(output.includes('flat'), 'Should show FLAT nesting annotation for Python')
+    assert.ok(output.includes('tenant tenant-abc-123'), 'Should show tenant ID for Python')
+  })
+
+  it('includes config annotations in labels for Java', () => {
+    const graph = parseFile(resolve(examplesDir, 'OrderProcessorFutures.java'))
+    const output = renderMermaid(graph)
+
+    assert.ok(output.includes('flat'), 'Should show FLAT nesting annotation for Java')
+    assert.ok(output.includes('tenant tenant-abc-123'), 'Should show tenant ID for Java')
+    assert.ok(output.includes('allOf') || output.includes('anyOf'), 'Should include promise combinator')
+  })
 })

@@ -13,8 +13,18 @@ function esc(text: string): string {
   return text.replace(/"/g, "'").replace(/[[\]{}()<>]/g, ' ')
 }
 
+function buildAnnotation(node: WorkflowNode): string {
+  const parts: string[] = []
+  if (node.nestingType === 'FLAT') parts.push('flat')
+  if (node.completionConfig) parts.push(node.completionConfig)
+  if (node.stepSemantics) parts.push(node.stepSemantics)
+  if (node.tenantId) parts.push(`tenant ${node.tenantId}`)
+  if (parts.length === 0) return ''
+  return '<br>' + parts.join('<br>')
+}
+
 function shapeForKind(node: WorkflowNode): string {
-  const label = esc(node.label)
+  const label = esc(node.label) + buildAnnotation(node)
   switch (node.kind) {
     case 'start':
     case 'end':

@@ -1,6 +1,6 @@
 {
   "name": "durable-viz",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Visualize AWS Lambda Durable Functions workflows. CLI and core library.",
   "license": "MIT",
   "repository": {

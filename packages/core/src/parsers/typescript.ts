@@ -117,6 +117,37 @@ function getTimeoutInfo(call: CallExpression): string | undefined {
   return undefined
 }
 
+/** Extract a property value from an object literal argument by property name. */
+function getConfigProp(call: CallExpression, propName: string): string | undefined {
+  const lastArg = call.getArguments()[call.getArguments().length - 1]
+  if (!lastArg) return undefined
+  const match = lastArg.getText().match(new RegExp(`${propName}\\s*:\\s*([^,\\n}]+)`))
+  return match?.[1]?.trim().replace(/['"]/g, '')
+}
+
+/** Extract nesting type from a config object. Detects both `nestingType: NestingType.FLAT` and `isVirtual: true`. */
+function getNestingType(call: CallExpression): string | undefined {
+  const lastArg = call.getArguments()[call.getArguments().length - 1]
+  if (!lastArg) return undefined
+  const text = lastArg.getText()
+  if (text.includes('NestingType.FLAT') || text.includes('nestingType\\s*:\\s*[\'"]FLAT[\'"]') || text.match(/nestingType\s*:\s*['"]FLAT['"]/)) return 'FLAT'
+  if (text.match(/isVirtual\s*:\s*true/)) return 'FLAT'
+  if (text.includes('virtualContext') && text.match(/virtualContext\s*:\s*true/)) return 'FLAT'
+  return undefined
+}
+
+/** Extract completion config from a config object. */
+function getCompletionConfig(call: CallExpression): string | undefined {
+  const lastArg = call.getArguments()[call.getArguments().length - 1]
+  if (!lastArg) return undefined
+  const text = lastArg.getText()
+  const methodMatch = text.match(/CompletionConfig\.(\w+)\(/)
+  if (methodMatch) return methodMatch[1].replace(/([A-Z])/g, ' $1').toLowerCase().trim()
+  const propMatch = text.match(/completionConfig\s*:\s*\{[^}]*?\}/)
+  if (propMatch) return propMatch[0].replace(/\s+/g, ' ')
+  return undefined
+}
+
 /** Get 1-based source line number for an AST node. */
 function lineOf(node: Node): number {
   return node.getStartLineNumber()
@@ -447,11 +478,13 @@ function extractFromBlock(
       if (isDurableCall(call, 'step', contextNames)) {
         markDescendants(call, consumed)
         const name = getStringArg(call, 0)
+        const semantics = getConfigProp(call, 'semantics')
         nodes.push({
           id: nextId('step'),
           kind: 'step',
           label: name ?? 'step',
           retryStrategy: getRetryStrategy(call),
+          stepSemantics: semantics?.includes('AtMostOnce') ? 'AtMostOncePerRetry' : undefined,
           sourceLine: lineOf(call),
         })
       } else if (isDurableCall(call, 'parallel', contextNames)) {
@@ -463,6 +496,8 @@ function extractFromBlock(
           kind: 'parallel',
           label: name ?? 'parallel',
           branches,
+          nestingType: getNestingType(call),
+          completionConfig: getCompletionConfig(call),
           sourceLine: lineOf(call),
         })
       } else if (isDurableCall(call, 'waitForCallback', contextNames)) {
@@ -514,6 +549,7 @@ function extractFromBlock(
           id: nextId('child'),
           kind: 'runInChildContext',
           label: name ?? 'childContext',
+          nestingType: getNestingType(call),
           sourceLine: lineOf(call),
         })
       } else if (isDurableCall(call, 'map', contextNames)) {
@@ -525,17 +561,21 @@ function extractFromBlock(
           kind: 'map',
           label: name ?? 'map',
           branches,
+          nestingType: getNestingType(call),
+          completionConfig: getCompletionConfig(call),
           sourceLine: lineOf(call),
         })
       } else if (isDurableCall(call, 'invoke', contextNames)) {
         markDescendants(call, consumed)
         const name = getStringArg(call, 0)
         const functionRef = getStringArg(call, 1) ?? call.getArguments()[1]?.getText()
+        const tenantId = getConfigProp(call, 'tenantId')
         nodes.push({
           id: nextId('invoke'),
           kind: 'invoke',
           label: name ?? 'invoke',
           target: functionRef,
+          tenantId,
           sourceLine: lineOf(call),
         })
       } else if (isPromiseCall(call, 'all', contextNames)) {
@@ -563,6 +603,7 @@ function extractFromBlock(
           kind: 'withRetry',
           label: name ?? 'withRetry',
           retryStrategy: getRetryStrategy(call),
+          nestingType: getNestingType(call),
           sourceLine: lineOf(call),
         })
       } else {

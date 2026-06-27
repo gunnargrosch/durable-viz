@@ -78,4 +78,53 @@ describe('PythonParser', () => {
       /No @durable_execution/
     )
   })
+
+  it('detects with_retry', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_processor_with_retry.py'))
+
+    const withRetry = graph.nodes.find((n) => n.kind === 'withRetry')
+    assert.ok(withRetry, 'Should detect with_retry')
+    assert.equal(withRetry.label, 'retry-fulfillment')
+  })
+
+  it('extracts step_semantics from StepConfig', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_processor_with_retry.py'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step' && n.label === 'validate_order')
+    assert.ok(step, 'Should find validate_order step')
+    assert.equal(step.stepSemantics, 'AtMostOncePerRetry')
+  })
+
+  it('extracts nesting_type from parallel config', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_processor_with_retry.py'))
+
+    const parallel = graph.nodes.find((n) => n.kind === 'parallel')
+    assert.ok(parallel, 'Should find parallel node')
+    assert.equal(parallel.nestingType, 'FLAT')
+  })
+
+  it('extracts completion_config from parallel config', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_processor_with_retry.py'))
+
+    const parallel = graph.nodes.find((n) => n.kind === 'parallel')
+    assert.ok(parallel, 'Should find parallel node')
+    assert.equal(parallel.completionConfig, 'first successful')
+  })
+
+  it('extracts tenant_id from invoke config', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_processor_with_retry.py'))
+
+    const invoke = graph.nodes.find((n) => n.kind === 'invoke')
+    assert.ok(invoke, 'Should find invoke node')
+    assert.equal(invoke.tenantId, 'tenant-abc-123')
+  })
+
+  it('extracts nesting_type from map config', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_processor_with_retry.py'))
+
+    const map = graph.nodes.find((n) => n.kind === 'map')
+    assert.ok(map, 'Should find map node')
+    assert.equal(map.nestingType, 'FLAT')
+    assert.equal(map.completionConfig, 'all completed')
+  })
 })
