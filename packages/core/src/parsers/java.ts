@@ -75,19 +75,68 @@ function findContextParam(source: string): string[] {
 }
 
 /**
+ * Find a DurableHandler subclass declaration, handling nested generics.
+ * Returns the match index and length, or null.
+ */
+function findDurableHandlerClass(source: string): { index: number; length: number } | null {
+  const pattern = /class\s+(\w+)\s+extends\s+DurableHandler\s*</g
+  let match
+  while ((match = pattern.exec(source)) !== null) {
+    const startIdx = match.index
+    let depth = 1
+    let i = match.index + match[0].length
+    while (i < source.length && depth > 0) {
+      if (source[i] === '<') depth++
+      else if (source[i] === '>') depth--
+      i++
+    }
+    if (depth === 0) {
+      return { index: startIdx, length: i - startIdx }
+    }
+  }
+  return null
+}
+
+/**
+ * Find a handleRequest method, handling nested generics in return type and params.
+ */
+function findHandleRequest(source: string): { index: number; length: number } | null {
+  const pattern = /(?:protected|public)\s+[\w<>,.\s]+\s+handleRequest\s*\(/g
+  let match
+  while ((match = pattern.exec(source)) !== null) {
+    // Verify the parameter list contains DurableContext and find the opening brace
+    let depth = 1
+    let i = match.index + match[0].length
+    let hasDurableContext = false
+    while (i < source.length && depth > 0) {
+      if (source[i] === '(') depth++
+      else if (source[i] === ')') depth--
+      else if (depth === 1 && source.slice(i, i + 14) === 'DurableContext') {
+        hasDurableContext = true
+      }
+      i++
+    }
+    if (depth !== 0 || !hasDurableContext) continue
+    // Find the opening brace after the closing paren
+    while (i < source.length && source[i] !== '{') i++
+    if (i < source.length) {
+      return { index: match.index, length: i + 1 - match.index }
+    }
+  }
+  return null
+}
+
+/**
  * Extract the handleRequest method body from a DurableHandler subclass.
  */
 function extractHandlerBody(source: string): string | null {
-  // Find class extending DurableHandler
-  const classPattern = /class\s+\w+\s+extends\s+DurableHandler\s*<[^>]*>/
-  if (!classPattern.test(source)) return null
+  const classMatch = findDurableHandlerClass(source)
+  if (!classMatch) return null
 
-  // Find handleRequest method
-  const methodPattern = /(?:protected|public)\s+\w+\s+handleRequest\s*\([^)]*DurableContext[^)]*\)\s*\{/
-  const match = methodPattern.exec(source)
-  if (!match) return null
+  const methodMatch = findHandleRequest(source)
+  if (!methodMatch) return null
 
-  const startIdx = match.index + match[0].length
+  const startIdx = methodMatch.index + methodMatch.length
   return extractJavaBlock(source, startIdx)
 }
 
@@ -307,14 +356,36 @@ function extractNodes(
 }
 
 /**
- * Extract the first string literal argument (step/invoke name) from a Java call.
+ * Extract the first string or variable argument (step/invoke name) from a Java call.
+ * Handles string literals, dotted identifiers, function calls, and variable references.
  */
 function extractNameArg(line: string, lines: string[], lineIdx: number): string | undefined {
-  // Java pattern: ctx.step("name", Class.class, stepCtx -> ...)
-  const searchText = lines.slice(lineIdx, lineIdx + 3).join(' ')
-  // Match first string argument: ctx.method("name"
-  const nameMatch = searchText.match(/\.\w+\s*\(\s*"([^"]+)"/)
-  return nameMatch?.[1]
+  // Build the full call text by matching parentheses from this line (handles multi-line)
+  let depth = 0
+  let started = false
+  const parts: string[] = []
+  for (let i = lineIdx; i < lines.length; i++) {
+    parts.push(lines[i])
+    for (const ch of lines[i]) {
+      if (ch === '(') { started = true; depth++ }
+      else if (ch === ')') depth--
+    }
+    if (started && depth === 0) break
+  }
+  const callText = parts.join(' ')
+  // String literal: ctx.method("name"
+  const strMatch = callText.match(/\.\w+\s*\(\s*"([^"]+)"/)
+  if (strMatch) return strMatch[1]
+  // Function call as first arg: ctx.method(funcName(...)
+  const fnMatch = callText.match(/\.\w+\s*\(\s*(\w+)\s*\(/)
+  if (fnMatch) return fnMatch[1]
+  // Dotted identifier: ctx.method(comp.name
+  const dottedMatch = callText.match(/\.\w+\s*\(\s*(\w+\.\w+)/)
+  if (dottedMatch) return dottedMatch[1]
+  // Variable reference: ctx.method(varName,
+  const varMatch = callText.match(/\.\w+\s*\(\s*(\w+)\s*[,)]/)
+  if (varMatch && !['null', 'true', 'false', 'this'].includes(varMatch[1])) return varMatch[1]
+  return undefined
 }
 
 /**

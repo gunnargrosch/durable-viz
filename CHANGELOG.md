@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.1] - 2026-06-27
+
+### Fixed
+
+- Mermaid edge labels used invalid `#nbsp;` instead of `&nbsp;`, causing rendering errors
+- Pipe characters (`|`) in condition node labels (e.g., `||` operators) now escaped to prevent Mermaid 11 parse errors
+- Duplicate nodes generated from try/catch blocks inside condition branches (switched to `getChildStatements`)
+- Dynamic step names showing generic "step" label — TypeScript now handles PropertyAccessExpression, Identifier, TemplateExpression, and CallExpression; Python now extracts function references and variable `name=` arguments; Java now supports dotted identifiers, function refs, and variable refs
+- Java parser now handles nested generics in class declarations and multi-line method calls
+- Broken VS Code Marketplace badge replaced with shields.io
+
 ## [0.4.0] - 2026-06-27
 
 ### Added

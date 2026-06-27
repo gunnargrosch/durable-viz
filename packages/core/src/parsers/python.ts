@@ -303,12 +303,40 @@ function extractNodes(
 
 /**
  * Extract the name= keyword argument from a Python call.
+ * Priority: string name= > variable name= > function reference.
  */
 function extractNameArg(line: string, lines: string[], lineIdx: number): string | undefined {
-  // Check current and nearby lines for name= argument
-  const searchText = lines.slice(lineIdx, lineIdx + 5).join(' ')
-  const nameMatch = searchText.match(/name\s*=\s*["']([^"']+)["']/)
-  return nameMatch?.[1]
+  // Build the full call text by matching parentheses from this line
+  const callText = extractCallText(lines, lineIdx)
+  // Explicit name= string literal is most reliable
+  const strMatch = callText.match(/name\s*=\s*["']([^"']+?)["']/)
+  if (strMatch) return strMatch[1]
+  // Function reference from first positional arg (more descriptive than unresolved variable)
+  const fnMatch = callText.match(/\.\w+\s*\(\s*(\w+)\s*\(/)
+  if (fnMatch) return fnMatch[1]
+  // Variable-based name= as last resort (name=comp_name)
+  const varMatch = callText.match(/name\s*=\s*(\w+?)\s*[,)]/)
+  if (varMatch) return varMatch[1]
+  return undefined
+}
+
+/**
+ * Extract the full call text from lines starting at lineIdx, matching parentheses.
+ * Returns text from the method call up to and including the matching closing paren.
+ */
+function extractCallText(lines: string[], lineIdx: number): string {
+  let depth = 0
+  let started = false
+  const parts: string[] = []
+  for (let i = lineIdx; i < lines.length; i++) {
+    parts.push(lines[i])
+    for (const ch of lines[i]) {
+      if (ch === '(') { started = true; depth++ }
+      else if (ch === ')') depth--
+    }
+    if (started && depth === 0) break
+  }
+  return parts.join(' ')
 }
 
 /**

@@ -5,6 +5,7 @@ import { PythonParser } from './python.js'
 
 const parser = new PythonParser()
 const examplesDir = resolve(import.meta.dirname, '../../../..', 'examples')
+const fixturesDir = resolve(import.meta.dirname, '../../../..', 'packages/core/test-fixtures')
 
 describe('PythonParser', () => {
   it('parses the order processor example', () => {
@@ -126,5 +127,31 @@ describe('PythonParser', () => {
     assert.ok(map, 'Should find map node')
     assert.equal(map.nestingType, 'FLAT')
     assert.equal(map.completionConfig, 'all completed')
+  })
+
+  it('extracts step name from function reference (no name=)', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'dynamic-names.py'))
+    const labels = graph.nodes.map((n) => n.label)
+    assert.ok(labels.includes('do_work'), 'Should extract function name do_work')
+  })
+
+  it('prefers explicit name= over function reference', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'dynamic-names.py'))
+    const labels = graph.nodes.map((n) => n.label)
+    assert.ok(labels.includes('explicit-name'), 'Should use explicit-name when name= is a string')
+  })
+
+  it('prefers function reference over unresolved variable name=', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'dynamic-names.py'))
+    const labels = graph.nodes.map((n) => n.label)
+    // context.step(do_work(...), name=comp_name) → function ref do_work beats unresolved variable comp_name
+    assert.ok(labels.includes('do_work'), 'Function ref should take priority over variable name=')
+  })
+
+  it('extracts step names from multi-line calls', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'multiline-names.py'))
+    const labels = graph.nodes.map((n) => n.label)
+    assert.ok(labels.includes('validate_order'), 'Should extract name from multi-line call')
+    assert.ok(labels.includes('process_payment'), 'Should extract name from multi-line call')
   })
 })
