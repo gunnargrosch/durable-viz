@@ -49,7 +49,7 @@ function getStringArg(call: CallExpression, index: number): string | undefined {
   if (kind === SyntaxKind.StringLiteral) {
     return arg.getText().replace(/^['"]|['"]$/g, '')
   }
-  if (kind === SyntaxKind.NoSubstitutionTemplateLiteral) {
+  if (arg.getKind() === SyntaxKind.NoSubstitutionTemplateLiteral) {
     return arg.getText().replace(/^`|`$/g, '')
   }
   if (kind === SyntaxKind.TemplateExpression) {
