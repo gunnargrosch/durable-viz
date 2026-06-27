@@ -308,15 +308,20 @@ function extractNodes(
 
 /**
  * Extract the first string or variable argument (step/invoke name) from a Java call.
- * Handles both string literals and variable references.
+ * Handles string literals, dotted identifiers, function calls, and variable references.
  */
 function extractNameArg(line: string, lines: string[], lineIdx: number): string | undefined {
-  const searchText = lines.slice(lineIdx, lineIdx + 3).join(' ')
-  // Match string literal: ctx.method("name"
-  const strMatch = searchText.match(/\.\w+\s*\(\s*"([^"]+)"/)
+  // String literal: ctx.method("name"
+  const strMatch = line.match(/\.\w+\s*\(\s*"([^"]+)"/)
   if (strMatch) return strMatch[1]
-  // Match variable reference (but not keywords/null): ctx.method(identifier,
-  const varMatch = searchText.match(/\.\w+\s*\(\s*(\w+)\s*[,)]/)
+  // Function call as first arg: ctx.method(funcName(...)
+  const fnMatch = line.match(/\.\w+\s*\(\s*(\w+)\s*\(/)
+  if (fnMatch) return fnMatch[1]
+  // Dotted identifier: ctx.method(comp.name
+  const dottedMatch = line.match(/\.\w+\s*\(\s*(\w+\.\w+)/)
+  if (dottedMatch) return dottedMatch[1]
+  // Variable reference: ctx.method(varName,
+  const varMatch = line.match(/\.\w+\s*\(\s*(\w+)\s*[,)]/)
   if (varMatch && !['null', 'true', 'false', 'this'].includes(varMatch[1])) return varMatch[1]
   return undefined
 }
