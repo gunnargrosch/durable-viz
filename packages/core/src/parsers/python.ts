@@ -303,12 +303,20 @@ function extractNodes(
 
 /**
  * Extract the name= keyword argument from a Python call.
+ * Falls back to extracting the function name from the first positional argument.
  */
 function extractNameArg(line: string, lines: string[], lineIdx: number): string | undefined {
-  // Check current and nearby lines for name= argument
   const searchText = lines.slice(lineIdx, lineIdx + 5).join(' ')
-  const nameMatch = searchText.match(/name\s*=\s*["']([^"']+)["']/)
-  return nameMatch?.[1]
+  // Non-greedy match to find the first name="..." or name='...' (avoids cross-call matches)
+  const strMatch = searchText.match(/name\s*=\s*["']([^"']+?)["']/)
+  if (strMatch) return strMatch[1]
+  // Non-greedy match to find the first name=identifier (avoids nested/cross-call matches)
+  const varMatch = searchText.match(/name\s*=\s*(\w+?)\s*[,)]/)
+  if (varMatch) return varMatch[1]
+  // Extract function name from first positional argument: context.step(func_name(...))
+  const fnMatch = searchText.match(/\.\w+\s*\(\s*(\w+)\s*\(/)
+  if (fnMatch) return fnMatch[1]
+  return undefined
 }
 
 /**

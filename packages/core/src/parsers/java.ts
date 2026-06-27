@@ -307,14 +307,18 @@ function extractNodes(
 }
 
 /**
- * Extract the first string literal argument (step/invoke name) from a Java call.
+ * Extract the first string or variable argument (step/invoke name) from a Java call.
+ * Handles both string literals and variable references.
  */
 function extractNameArg(line: string, lines: string[], lineIdx: number): string | undefined {
-  // Java pattern: ctx.step("name", Class.class, stepCtx -> ...)
   const searchText = lines.slice(lineIdx, lineIdx + 3).join(' ')
-  // Match first string argument: ctx.method("name"
-  const nameMatch = searchText.match(/\.\w+\s*\(\s*"([^"]+)"/)
-  return nameMatch?.[1]
+  // Match string literal: ctx.method("name"
+  const strMatch = searchText.match(/\.\w+\s*\(\s*"([^"]+)"/)
+  if (strMatch) return strMatch[1]
+  // Match variable reference (but not keywords/null): ctx.method(identifier,
+  const varMatch = searchText.match(/\.\w+\s*\(\s*(\w+)\s*[,)]/)
+  if (varMatch && !['null', 'true', 'false', 'this'].includes(varMatch[1])) return varMatch[1]
+  return undefined
 }
 
 /**
