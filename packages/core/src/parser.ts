@@ -24,11 +24,13 @@ export interface Parser {
 import { TypeScriptParser } from './parsers/typescript.js'
 import { PythonParser } from './parsers/python.js'
 import { JavaParser } from './parsers/java.js'
+import { CSharpParser } from './parsers/csharp.js'
 
 const parsers: Parser[] = [
   new TypeScriptParser(),
   new PythonParser(),
   new JavaParser(),
+  new CSharpParser(),
 ]
 
 function getParser(filePath: string): Parser {

@@ -47,7 +47,7 @@
       "editor/title": [
         {
           "command": "durable-viz.open",
-          "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python || resourceLangId == java",
+          "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python || resourceLangId == java || resourceLangId == csharp",
           "group": "navigation"
         }
       ]

@@ -4,12 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.5.0] - 2026-06-27
+## [0.5.0] - 2026-06-28
 
 ### Added
 
-- **Build Mode (VS Code)**: Drag-and-drop visual canvas to construct workflow diagrams from durable primitives. Generates boilerplate handler code in TypeScript, Python, or Java.
-- **Code generation library** (`generateCode`): Convert any `WorkflowGraph` to TypeScript, Python, or Java handler code with proper imports, condition if/else blocks, and parallel branch scaffolding.
+- **C# (.NET) parser** for the [AWS Lambda Durable Execution SDK for .NET](https://github.com/aws/aws-lambda-dotnet/issues/2418) preview (`Amazon.Lambda.DurableExecution` 0.x). Detects all durable primitives from `IDurableContext`: `StepAsync`, `WaitAsync`, `CreateCallbackAsync`, `WaitForCallbackAsync`, `WaitForConditionAsync`, `RunInChildContextAsync`, `InvokeAsync`, `ParallelAsync`, `MapAsync`.
+- Supports both the **executable** programming model (`Main` + `LambdaBootstrap`) and the **class-library** model (`[assembly: LambdaSerializer]`).
+- Extracts names from C# `name:` named arguments and detects `DurableBranch<T>` patterns for parallel branches.
+- Handles Allman-style `if`/`else` braces (common C# convention) for condition detection.
+- Supports generic type arguments in method calls (e.g., `StepAsync<T>()`, `InvokeAsync<TPayload, TResult>()`).
+- Two example files: `OrderWorkflow.cs` (executable model) and `OrderProcessor.cs` (class-library model).
+- 16 test cases covering all primitives and both entry-point models.
+- VS Code extension activates for `.cs` files.
 
 ## [0.4.1] - 2026-06-27
 

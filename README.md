@@ -9,7 +9,7 @@
 
 Visualize [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows. Static analysis turns your handler code into a flowchart, no deployment or execution required.
 
-Supports **TypeScript/JavaScript**, **Python**, and **Java** runtimes.
+Supports **TypeScript/JavaScript**, **Python**, **Java**, and **C# (.NET)** runtimes.
 
 ```mermaid
 graph LR
@@ -85,6 +85,10 @@ npx durable-viz examples/order_processor_with_retry.py --open
 # Java
 npx durable-viz examples/OrderProcessor.java --open
 npx durable-viz examples/OrderProcessorFutures.java --open
+
+# C# (.NET)
+npx durable-viz examples/OrderWorkflow.cs --open
+npx durable-viz examples/OrderProcessor.cs --open
 ```
 
 ## VS Code Extension
@@ -131,7 +135,7 @@ The diagram appears in a side panel. It auto-refreshes when you save the file.
 | **Save PNG** | Export the diagram as a high-resolution transparent PNG |
 | **Source view** | View the raw Mermaid syntax or JSON graph |
 
-The extension activates for `.ts`, `.js`, `.py`, and `.java` files. A toolbar button also appears in the editor title bar for these file types.
+The extension activates for `.ts`, `.js`, `.py`, `.java`, and `.cs` files. A toolbar button also appears in the editor title bar for these file types.
 
 ## CLI Reference
 
@@ -174,18 +178,18 @@ durable-viz handler.ts --json
 
 The parser detects all durable execution SDK primitives.
 
-| Primitive | TypeScript | Python | Java |
-| --- | --- | --- | --- |
-| Step | `context.step()` | `context.step()` | `ctx.step()` |
-| Invoke | `context.invoke()` | `context.invoke()` | `ctx.invoke()` |
-| Parallel | `context.parallel()` | `context.parallel()` | `ctx.parallel()` |
-| Map | `context.map()` | `context.map()` | `ctx.map()` |
-| Wait | `context.wait()` | `context.wait()` | `ctx.wait()` |
-| Wait for Callback | `context.waitForCallback()` | `context.wait_for_callback()` | `ctx.waitForCallback()` |
-| Create Callback | `context.createCallback()` | `context.create_callback()` | `ctx.createCallback()` |
-| Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | `ctx.waitForCondition()` |
-| Child Context | `context.runInChildContext()` | `context.run_in_child_context()` | `ctx.runInChildContext()` |
-| With Retry | `withRetry(context, ...)` | `with_retry(context, ...)` | `withRetry(ctx, ...)` |
+| Primitive | TypeScript | Python | Java | C# (.NET) |
+| --- | --- | --- | --- | --- |
+| Step | `context.step()` | `context.step()` | `ctx.step()` | `ctx.StepAsync()` |
+| Invoke | `context.invoke()` | `context.invoke()` | `ctx.invoke()` | `ctx.InvokeAsync()` |
+| Parallel | `context.parallel()` | `context.parallel()` | `ctx.parallel()` | `ctx.ParallelAsync()` |
+| Map | `context.map()` | `context.map()` | `ctx.map()` | `ctx.MapAsync()` |
+| Wait | `context.wait()` | `context.wait()` | `ctx.wait()` | `ctx.WaitAsync()` |
+| Wait for Callback | `context.waitForCallback()` | `context.wait_for_callback()` | `ctx.waitForCallback()` | `ctx.WaitForCallbackAsync()` |
+| Create Callback | `context.createCallback()` | `context.create_callback()` | `ctx.createCallback()` | `ctx.CreateCallbackAsync()` |
+| Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | `ctx.waitForCondition()` | `ctx.WaitForConditionAsync()` |
+| Child Context | `context.runInChildContext()` | `context.run_in_child_context()` | `ctx.runInChildContext()` | `ctx.RunInChildContextAsync()` |
+| With Retry | `withRetry(context, ...)` | `with_retry(context, ...)` | `withRetry(ctx, ...)` | via `StepConfig` |
 
 TypeScript also detects `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`.
 
@@ -195,12 +199,12 @@ Java also detects `DurableFuture.allOf(futures...)` and `DurableFuture.anyOf(fut
 
 The parser extracts configuration metadata and displays it as annotations on diagram nodes:
 
-| Feature | TypeScript | Python | Java |
-| --- | :---: | :---: | :---: |
-| Nesting type (`FLAT`/`NESTED`) | ✓ | ✓ | ✓ |
-| Completion config | ✓ | ✓ | ✓ |
-| Step semantics (`AtMostOncePerRetry`) | ✓ | ✓ | ✓ |
-| Tenant isolation (`tenantId`) | ✓ | ✓ | ✓ |
+| Feature | TypeScript | Python | Java | C# |
+| --- | :---: | :---: | :---: | :---: |
+| Nesting type (`FLAT`/`NESTED`) | ✓ | ✓ | ✓ | ✓ |
+| Completion config | ✓ | ✓ | ✓ | ✓ |
+| Step semantics (`AtMostOncePerRetry`) | ✓ | ✓ | ✓ | — |
+| Tenant isolation (`tenantId`) | ✓ | ✓ | ✓ | — |
 
 ### Visual Encoding
 
@@ -239,6 +243,10 @@ Regex-based parser. Finds `@durable_execution` decorated handlers and extracts `
 
 Regex-based parser. Finds classes extending `DurableHandler` and extracts `ctx.<method>()` calls from the `handleRequest` method with their string literal names. Detects `DurableFuture.allOf()` and `DurableFuture.anyOf()` static calls as promise combinators, and extracts config-level metadata from builder-pattern configs (nesting type, completion config, step semantics, tenant isolation).
 
+### C# (.NET)
+
+Regex-based parser. Finds `DurableFunction.WrapAsync` calls to locate the workflow function, then extracts `ctx.<Method>Async()` calls from the workflow body. Supports both the **executable** model (`Main` + `LambdaBootstrap`) and the **class-library** model (`[assembly: LambdaSerializer]`). Extracts names from `name:` named arguments and detects `DurableBranch<T>` patterns for parallel branches. Handles Allman-style braces (common C# convention) for `if`/`else` condition detection.
+
 ### Conditionals
 
 All three parsers detect `if` statements that wrap durable calls and represent them as condition (diamond) nodes in the graph. When the `if` block ends with a `return`, the "yes" branch connects to End instead of falling through.
@@ -255,6 +263,8 @@ The `examples/` directory contains sample handlers for each language:
 | `order_processor_with_retry.py` | Python | step, parallel, map, invoke, withRetry, config features |
 | `OrderProcessor.java` | Java | step, parallel, wait, invoke, waitForCallback, condition |
 | `OrderProcessorFutures.java` | Java | step, parallel, map, invoke, runInChildContext, withRetry, allOf, anyOf, config features |
+| `OrderWorkflow.cs` | C# | step, parallel, wait, waitForCallback, condition |
+| `OrderProcessor.cs` | C# | step, parallel, wait, invoke, waitForCallback, condition |
 
 ```shell
 npx durable-viz examples/order-workflow.ts --open
@@ -272,6 +282,7 @@ durable-viz/
           typescript.ts           # TypeScript/JS parser (ts-morph AST)
           python.ts               # Python parser (regex)
           java.ts                 # Java parser (regex)
+          csharp.ts               # C# parser (regex)
         graph.ts                  # WorkflowGraph model + edge builder
         renderers/
           mermaid.ts              # Mermaid flowchart renderer
@@ -294,7 +305,7 @@ The core package is language-agnostic above the parser layer. Adding a new langu
 ```
 [source file] → Parser → WorkflowGraph → Renderer → [output]
                   │                          │
-          TypeScript / Python / Java    Mermaid / JSON
+          TS / Python / Java / C#       Mermaid / JSON
 ```
 
 ## Limitations
@@ -302,7 +313,7 @@ The core package is language-agnostic above the parser layer. Adding a new langu
 - **Same-file only.** Function-reference following resolves functions defined in the same file. Imported helpers from other files are not followed.
 - **Static analysis.** The parser sees all possible paths, not a specific execution. Dynamic parallel branches (from `.map()`) show all registered targets, even if a given execution only uses a subset.
 - **Mermaid rendering.** Arrow routing for fan-in (multiple edges converging on one node) is controlled by Mermaid's layout engine. Complex workflows with many parallel branches may have overlapping edges.
-- **Python/Java parsers are regex-based.** They handle standard patterns well but may miss unusual formatting (e.g., method calls split across many lines with comments between arguments).
+- **Python/Java/C# parsers are regex-based.** They handle standard patterns well but may miss unusual formatting (e.g., method calls split across many lines with comments between arguments).
 
 ## Contributing
 
