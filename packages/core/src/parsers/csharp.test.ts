@@ -133,19 +133,14 @@ describe('CSharpParser', () => {
   })
 
   it('parses CreateCallbackAsync with generic type arg', () => {
-    // The .NET SDK test functions exercise CreateCallbackAsync directly
-    const graph = parser.parseFile(resolve(
-      '/home/gunnar/Projects/durable-sdks/aws-lambda-dotnet/Libraries/test/Amazon.Lambda.DurableExecution.IntegrationTests/TestFunctions/CreateCallbackHappyPathFunction/Function.cs'
-    ))
+    const graph = parser.parseFile(resolve(fixturesDir, 'CreateCallback.cs'))
 
     const cb = graph.nodes.find((n) => n.kind === 'createCallback')
     assert.ok(cb, 'Should detect CreateCallbackAsync')
   })
 
   it('parses WaitForConditionAsync with named args', () => {
-    const graph = parser.parseFile(resolve(
-      '/home/gunnar/Projects/durable-sdks/aws-lambda-dotnet/Libraries/test/Amazon.Lambda.DurableExecution.IntegrationTests/TestFunctions/WaitForConditionHappyPathFunction/Function.cs'
-    ))
+    const graph = parser.parseFile(resolve(fixturesDir, 'WaitForCondition.cs'))
 
     const wfc = graph.nodes.find((n) => n.kind === 'waitForCondition')
     assert.ok(wfc, 'Should detect WaitForConditionAsync')
@@ -153,18 +148,14 @@ describe('CSharpParser', () => {
   })
 
   it('parses RunInChildContextAsync', () => {
-    const graph = parser.parseFile(resolve(
-      '/home/gunnar/Projects/durable-sdks/aws-lambda-dotnet/Libraries/test/Amazon.Lambda.DurableExecution.IntegrationTests/TestFunctions/ChildContextFunction/Function.cs'
-    ))
+    const graph = parser.parseFile(resolve(fixturesDir, 'ChildContext.cs'))
 
     const child = graph.nodes.find((n) => n.kind === 'runInChildContext')
     assert.ok(child, 'Should detect RunInChildContextAsync')
   })
 
   it('parses MapAsync', () => {
-    const graph = parser.parseFile(resolve(
-      '/home/gunnar/Projects/durable-sdks/aws-lambda-dotnet/Libraries/test/Amazon.Lambda.DurableExecution.IntegrationTests/TestFunctions/MapHappyPathFunction/Function.cs'
-    ))
+    const graph = parser.parseFile(resolve(fixturesDir, 'MapFunction.cs'))
 
     const map = graph.nodes.find((n) => n.kind === 'map')
     assert.ok(map, 'Should detect MapAsync')
