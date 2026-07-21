@@ -4,3 +4,4 @@ dist/
 *.vsix
 *.log
 .DS_Store
+.aws-sam

@@ -515,20 +515,68 @@ function openBuildPanel(context: vscode.ExtensionContext) {
   buildPanel.webview.html = buildBuildHtml()
 
   buildPanel.webview.onDidReceiveMessage(async (message) => {
+    if (message.type === 'debugLog') {
+      console.log('[build]', message.msg)
+      return
+    }
     if (message.type === 'generateCode') {
       const { graphJson, language } = message
       try {
         const graph = JSON.parse(graphJson)
         const code = generateCode(graph, { language })
-        const ext = language === 'python' ? '.py' : language === 'java' ? '.java' : '.ts'
+        const ext = language === 'python' ? '.py' : language === 'java' ? '.java' : language === 'csharp' ? '.cs' : '.ts'
+        const lang = language === 'python' ? 'python' : language === 'java' ? 'java' : language === 'csharp' ? 'csharp' : 'typescript'
         const doc = await vscode.workspace.openTextDocument({
           content: code,
-          language: language === 'python' ? 'python' : language === 'java' ? 'java' : 'typescript',
+          language: lang,
         })
         await vscode.window.showTextDocument(doc, vscode.ViewColumn.One)
         vscode.window.showInformationMessage(`Generated ${graph.name || 'workflow'}${ext}`)
       } catch (err) {
         vscode.window.showErrorMessage(`Code generation failed: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    if (message.type === 'saveGraph') {
+      try {
+        const uri = await vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.file('workflow.json'),
+          filters: { 'Workflow Graph': ['json'] },
+        })
+        if (uri) {
+          await vscode.workspace.fs.writeFile(uri, Buffer.from(message.data, 'utf-8'))
+          vscode.window.showInformationMessage('Graph saved.')
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage(`Save failed: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    if (message.type === 'loadGraph') {
+      try {
+        const uris = await vscode.window.showOpenDialog({
+          filters: { 'Workflow Graph': ['json'] },
+          canSelectMany: false,
+        })
+        if (uris && uris[0]) {
+          const data = await vscode.workspace.fs.readFile(uris[0])
+          buildPanel.webview.postMessage({ type: 'loadGraphData', data: Buffer.from(data).toString('utf-8') })
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage(`Load failed: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    if (message.type === 'exportPNG') {
+      try {
+        const uri = await vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.file('workflow.png'),
+          filters: { 'PNG Image': ['png'] },
+        })
+        if (uri) {
+          const base64 = message.data.replace(/^data:image\/png;base64,/, '')
+          await vscode.workspace.fs.writeFile(uri, Buffer.from(base64, 'base64'))
+          vscode.window.showInformationMessage('PNG exported.')
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage(`Export failed: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
   })
@@ -622,6 +670,14 @@ function buildBuildHtml(): string {
     .toolbar button.primary:hover {
       background: var(--vscode-button-hoverBackground, #1a8ad4);
     }
+    .toolbar button.small {
+      padding: 2px 6px;
+      font-size: 10px;
+    }
+    .toolbar .toolbar-row {
+      display: flex;
+      gap: 3px;
+    }
     .canvas-area {
       flex: 1;
       position: relative;
@@ -630,6 +686,9 @@ function buildBuildHtml(): string {
     #cy {
       width: 100%;
       height: 100%;
+      background-image:
+        radial-gradient(circle, var(--vscode-panel-border, #444) 1px, transparent 1px);
+      background-size: 20px 20px;
     }
     .help {
       padding: 6px 8px;
@@ -641,38 +700,66 @@ function buildBuildHtml(): string {
 </head>
 <body>
   <div class="palette">
-    <div class="palette-header">Primitives</div>
+    <div class="palette-header">
+      <select id="palette-language" style="width:100%; background:var(--vscode-dropdown-background, #3c3c3c); border:1px solid var(--vscode-dropdown-border, #555); color:var(--vscode-dropdown-foreground, #ccc); padding:2px 4px; font-size:11px; border-radius:3px;">
+        <option value="typescript">TypeScript</option>
+        <option value="python">Python</option>
+        <option value="java">Java</option>
+        <option value="csharp">C# (.NET)</option>
+      </select>
+    </div>
     <div class="palette-items">
-      <div class="palette-item step" draggable="true" data-kind="step" data-label="step">🟢 Step</div>
-      <div class="palette-item invoke" draggable="true" data-kind="invoke" data-label="invoke">🟠 Invoke</div>
-      <div class="palette-item parallel" draggable="true" data-kind="parallel" data-label="parallel">🟣 Parallel</div>
-      <div class="palette-item" draggable="true" data-kind="map" data-label="map">🟣 Map</div>
-      <div class="palette-item wait" draggable="true" data-kind="wait" data-label="wait">🔴 Wait</div>
-      <div class="palette-item wait" draggable="true" data-kind="waitForCallback" data-label="callback">🔴 Callback</div>
-      <div class="palette-item wait" draggable="true" data-kind="createCallback" data-label="create-callback">🔴 Create Callback</div>
-      <div class="palette-item wait" draggable="true" data-kind="waitForCondition" data-label="poll">🔴 Poll</div>
-      <div class="palette-item condition" draggable="true" data-kind="condition" data-label="condition">🔵 Condition</div>
-      <div class="palette-item" draggable="true" data-kind="withRetry" data-label="retry">🩵 With Retry</div>
-      <div class="palette-item" draggable="true" data-kind="runInChildContext" data-label="child">🩵 Child Context</div>
+      <div class="palette-item step" draggable="true" data-kind="step" data-label="step" data-langs="typescript python java csharp">🟢 Step</div>
+      <div class="palette-item invoke" draggable="true" data-kind="invoke" data-label="invoke" data-langs="typescript python java csharp">🟠 Invoke</div>
+      <div class="palette-item parallel" draggable="true" data-kind="parallel" data-label="parallel" data-langs="typescript python java csharp">🟣 Parallel</div>
+      <div class="palette-item" draggable="true" data-kind="map" data-label="map" data-langs="typescript python java csharp">🟣 Map</div>
+      <div class="palette-item wait" draggable="true" data-kind="wait" data-label="wait" data-langs="typescript python java csharp">🔴 Wait</div>
+      <div class="palette-item wait" draggable="true" data-kind="waitForCallback" data-label="callback" data-langs="typescript python java csharp">🔴 Callback</div>
+      <div class="palette-item wait" draggable="true" data-kind="createCallback" data-label="create-callback" data-langs="typescript python java csharp">🔴 Create Callback</div>
+      <div class="palette-item wait" draggable="true" data-kind="waitForCondition" data-label="poll" data-langs="typescript python java csharp">🔴 Poll</div>
+      <div class="palette-item condition" draggable="true" data-kind="condition" data-label="condition" data-langs="typescript python java csharp">🔵 Condition</div>
+      <div class="palette-item" draggable="true" data-kind="withRetry" data-label="retry" data-langs="typescript python java">🩵 With Retry</div>
+      <div class="palette-item" draggable="true" data-kind="runInChildContext" data-label="child" data-langs="typescript python java csharp">🩵 Child Context</div>
     </div>
     <div class="help">
       Drag primitives onto the canvas.<br>
       Click nodes to connect them.<br>
-      Double-click to rename.<br>
-      Right-click to delete.
+      Drop nodes on <b>Parallel/Map</b> to create branches.<br>
+      <b>Condition</b> edges are auto-labeled <b>if</b>/<b>else</b> when connecting.<br>
+      Double-click to rename, <b>Del</b> to delete selected, <b>Esc</b> to deselect.
     </div>
     <div class="toolbar">
-      <select id="language">
-        <option value="typescript">TypeScript</option>
-        <option value="python">Python</option>
-        <option value="java">Java</option>
-      </select>
       <button id="generate-btn" class="primary">Generate Code</button>
-      <button id="clear-btn">Clear Canvas</button>
+      <div class="toolbar-row">
+        <button id="preview-btn" class="small">Preview</button>
+        <button id="layout-btn" class="small">Arrange</button>
+        <button id="fit-btn" class="small">Fit</button>
+        <button id="export-btn" class="small">PNG</button>
+      </div>
+      <div class="toolbar-row">
+        <button id="save-btn" class="small">Save</button>
+        <button id="load-btn" class="small">Load</button>
+        <button id="clear-btn" class="small">Clear</button>
+      </div>
     </div>
   </div>
-  <div class="canvas-area" id="canvas-area">
+    <div class="canvas-area" id="canvas-area">
     <div id="cy"></div>
+  </div>
+  <div id="rename-input" style="display:none; position:absolute; z-index:100;">
+    <input type="text" id="rename-field" style="padding:4px 8px; border:2px solid #007acc; background:#1e1e1e; color:#d4d4d4; font-size:12px; border-radius:3px;" />
+  </div>
+  <div id="preview-panel" style="display:none; position:absolute; inset:0; z-index:50; background:var(--vscode-editor-background, #1e1e1e); flex-direction:column;">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px; border-bottom:1px solid var(--vscode-panel-border, #333); flex-shrink:0;">
+      <span style="font-size:12px; font-weight:600;">Preview</span>
+      <div style="display:flex; gap:4px;">
+        <button id="preview-mermaid-tab" style="background:var(--vscode-button-background); border:none; color:var(--vscode-button-foreground); padding:2px 10px; border-radius:3px; cursor:pointer; font-size:11px;">Mermaid</button>
+        <button id="preview-close" style="background:var(--vscode-button-secondaryBackground,#333); border:none; color:var(--vscode-button-secondaryForeground,#ccc); padding:2px 10px; border-radius:3px; cursor:pointer; font-size:11px;">Close</button>
+      </div>
+    </div>
+    <div style="flex:1; overflow:auto; padding:12px;">
+      <pre id="preview-content" style="white-space:pre-wrap; font-family:monospace; font-size:11px; color:var(--vscode-editor-foreground,#d4d4d4);"></pre>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30/dist/cytoscape.min.js"></script>
@@ -682,6 +769,9 @@ function buildBuildHtml(): string {
     // --- Cytoscape setup ---
     const cy = cytoscape({
       container: document.getElementById('cy'),
+      userPanningEnabled: true,
+      userZoomingEnabled: true,
+      boxSelectionEnabled: true,
       style: [
         {
           selector: 'node',
@@ -692,20 +782,52 @@ function buildBuildHtml(): string {
             'text-valign': 'center',
             'text-halign': 'center',
             'font-size': '12px',
-            'width': 80,
-            'height': 40,
+            'width': 70,
+            'height': 36,
             'shape': 'round-rectangle',
             'text-wrap': 'ellipsis',
             'text-max-width': '80px',
+            'border-width': 0,
+          }
+        },
+        {
+          selector: 'node:selected',
+          style: {
+            'border-width': 2,
+            'border-color': '#007acc',
+            'border-style': 'solid',
+            'overlay-opacity': 0.1,
+            'overlay-color': '#007acc',
+          }
+        },
+        {
+          selector: 'edge:selected',
+          style: {
+            'line-color': '#007acc',
+            'target-arrow-color': '#007acc',
+            'width': 3,
           }
         },
         {
           selector: 'node[kind="invoke"]',
-          style: { 'background-color': '#b8873a', 'color': '#f5edd8', 'shape': 'trapezoid' }
+          style: { 'background-color': '#b8873a', 'color': '#f5edd8', 'shape': 'rhomboid' }
         },
         {
           selector: 'node[kind="parallel"], node[kind="map"]',
-          style: { 'background-color': '#7b6b9e', 'color': '#e8e3f0', 'shape': 'hexagon' }
+          style: {
+            'background-color': '#7b6b9e',
+            'color': '#e8e3f0',
+            'shape': 'round-rectangle',
+            'width': 240,
+            'height': 100,
+            'border-width': 2,
+            'border-style': 'dashed',
+            'border-color': '#655883',
+            'text-valign': 'top',
+            'text-halign': 'center',
+            'font-size': '11px',
+            'text-margin-y': -8,
+          }
         },
         {
           selector: 'node[kind="wait"], node[kind="waitForCallback"], node[kind="createCallback"], node[kind="waitForCondition"]',
@@ -718,6 +840,26 @@ function buildBuildHtml(): string {
         {
           selector: 'node[kind="runInChildContext"], node[kind="withRetry"]',
           style: { 'background-color': '#4a849e', 'color': '#deedf3', 'shape': 'round-rectangle' }
+        },
+        {
+          selector: 'node.drag-ghost',
+          style: {
+            'background-color': '#007acc',
+            'border-color': '#007acc',
+            'border-width': 1,
+            'border-style': 'dashed',
+            'opacity': 0.4,
+            'width': 70,
+            'height': 36,
+          }
+        },
+        {
+          selector: 'node.connecting',
+          style: {
+            'border-width': 2,
+            'border-color': '#ff9944',
+            'border-style': 'solid',
+          }
         },
         {
           selector: 'edge',
@@ -733,8 +875,62 @@ function buildBuildHtml(): string {
           }
         }
       ],
-      layout: { name: 'grid', rows: 1 },
     });
+
+    // --- Grid snap ---
+    const GRID = 20;
+    function snapToGrid(v) { return Math.round(v / GRID) * GRID; }
+    function modelFromRendered(rx, ry) {
+      var z = cy.zoom(), p = cy.pan();
+      return {
+        x: snapToGrid((rx - p.x) / z),
+        y: snapToGrid((ry - p.y) / z),
+      };
+    }
+    cy.on('dragfree', 'node', function (evt) {
+      var n = evt.target;
+      n.position({
+        x: snapToGrid(n.position().x),
+        y: snapToGrid(n.position().y),
+      });
+      if ((n.data('kind') === 'parallel' || n.data('kind') === 'map') && dragChildOffsets.length) {
+        dragChildOffsets.forEach(c => {
+          c.node.position({ x: n.position().x + c.ox, y: n.position().y + c.oy });
+        });
+      }
+    });
+
+    let dragParent = null;
+    let dragChildOffsets = [];
+    cy.on('grab', 'node[kind="parallel"], node[kind="map"]', function (evt) {
+      const parent = evt.target;
+      dragParent = parent;
+      dragChildOffsets = cy.nodes().filter(n => n.data('_parent') === parent.id())
+        .map(n => ({ node: n, ox: n.position().x - parent.position().x, oy: n.position().y - parent.position().y }));
+    });
+    cy.on('drag', 'node[kind="parallel"], node[kind="map"]', function (evt) {
+      if (!dragParent) return;
+      dragChildOffsets.forEach(c => {
+        c.node.position({ x: dragParent.position().x + c.ox, y: dragParent.position().y + c.oy });
+      });
+    });
+    cy.on('free', 'node', function (evt) {
+      if (evt.target === dragParent) {
+        dragParent = null;
+        dragChildOffsets = [];
+      }
+    });
+
+    function fitWithMaxZoom(maxZoom) {
+      maxZoom = maxZoom || 1.5;
+      var els = cy.elements();
+      if (els.length === 0) return;
+      cy.fit(els, 30);
+      if (cy.zoom() > maxZoom) {
+        cy.zoom(maxZoom);
+        cy.center(els);
+      }
+    }
 
     // --- Drag from palette ---
     let nodeCounter = 0;
@@ -748,25 +944,130 @@ function buildBuildHtml(): string {
       });
     });
 
-    const canvasArea = document.getElementById('canvas-area');
-    canvasArea.addEventListener('dragover', (e) => { e.preventDefault(); });
-    canvasArea.addEventListener('drop', (e) => {
-      e.preventDefault();
-      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
-      const rect = canvasArea.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      addNode(data.kind, data.label, x, y);
+    // --- Language selector filters primitives ---
+    const paletteLang = document.getElementById('palette-language');
+    paletteLang.addEventListener('change', () => {
+      const lang = paletteLang.value;
+      document.querySelectorAll('.palette-item').forEach(item => {
+        const langs = (item.dataset.langs || '').split(' ');
+        item.style.display = langs.includes(lang) ? '' : 'none';
+      });
     });
 
-    function addNode(kind, label, x, y) {
+    const canvasArea = document.getElementById('canvas-area');
+    let dragCount = 0;
+    let dragGhost = null;
+
+    function setDragOver(active) {
+      if (active) {
+        cy.nodes('[kind="parallel"], [kind="map"]').style('border-color', '#a08cc4');
+      } else {
+        cy.nodes('[kind="parallel"], [kind="map"]').style('border-color', '#655883');
+      }
+    }
+
+    canvasArea.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCount++;
+      setDragOver(true);
+    });
+    canvasArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (dragCount === 0) { dragCount++; setDragOver(true); }
+
+      const rect = canvasArea.getBoundingClientRect();
+      const rx = e.clientX - rect.left;
+      const ry = e.clientY - rect.top;
+      const pos = modelFromRendered(rx, ry);
+      if (!dragGhost) {
+        dragGhost = cy.add({
+          group: 'nodes',
+          data: { id: '__drag_ghost__', label: '' },
+          position: { x: pos.x, y: pos.y },
+          classes: 'drag-ghost',
+        });
+      } else {
+        dragGhost.position({ x: pos.x, y: pos.y });
+      }
+    });
+    canvasArea.addEventListener('dragleave', (e) => {
+      dragCount--;
+      if (dragCount <= 0) { dragCount = 0; setDragOver(false); }
+      if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+    });
+    canvasArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragCount = 0;
+      setDragOver(false);
+      if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      const rect = canvasArea.getBoundingClientRect();
+      const rx = e.clientX - rect.left;
+      const ry = e.clientY - rect.top;
+      const pos = modelFromRendered(rx, ry);
+
+      // Hit test in rendered space (renderedBoundingBox is container-relative)
+      const hitNode = cy.nodes('[kind="parallel"], [kind="map"]').filter(n => {
+        const bb = n.renderedBoundingBox({ includeNodes: true, includeOverlays: false, includeEdges: false });
+        return bb.x1 <= rx && rx <= bb.x2 && bb.y1 <= ry && ry <= bb.y2;
+      }).first();
+
+      if (hitNode.nonempty()) {
+        addNode(data.kind, data.label, pos.x, pos.y, hitNode.id());
+      } else {
+        addNode(data.kind, data.label, pos.x, pos.y);
+      }
+    });
+
+    function addNode(kind, label, x, y, parentId) {
+      pushUndo();
       nodeCounter++;
       const id = kind + '_' + nodeCounter;
-      cy.add({
-        group: 'nodes',
-        data: { id, kind, label },
-        position: { x, y },
+      let node;
+      if (parentId) {
+        const p = cy.getElementById(parentId);
+        const pcx = p.position().x;
+        const pcy = p.position().y;
+        const existing = cy.nodes().filter(n => n.data('_parent') === parentId);
+        const sorted = existing.sort((a, b) => a.position().x - b.position().x);
+        const total = sorted.length + 1;
+        const childW = 70, gap = 20;
+        const span = total * childW + (total - 1) * gap;
+        const startX = pcx - span / 2 + childW / 2;
+        for (let i = 0; i < sorted.length; i++) {
+          sorted[i].position({ x: startX + i * (childW + gap), y: pcy + 12 });
+        }
+        const px = startX + sorted.length * (childW + gap);
+        const py = pcy + 12;
+        node = cy.add({
+          group: 'nodes',
+          data: { id, kind, label, _parent: parentId },
+          position: { x: px, y: py },
+        });
+      } else {
+        node = cy.add({
+          group: 'nodes',
+          data: { id, kind, label },
+          position: { x, y },
+        });
+      }
+
+      // Auto-show rename input so user can name the node immediately
+      renameNode = node;
+      labelEdge = null;
+      renameField.value = label;
+      requestAnimationFrame(() => {
+        const bb = node.renderedBoundingBox({ includeNodes: false });
+        const cyContainer = document.getElementById('canvas-area');
+        const cyOffset = cyContainer.getBoundingClientRect();
+        renameInput.style.left = (cyOffset.left + bb.x1) + 'px';
+        renameInput.style.top = (cyOffset.top + bb.y2 + 4) + 'px';
+        renameInput.style.display = 'block';
+        renameField.focus();
+        renameField.select();
       });
+      clearTimeout(renameTimeout);
     }
 
     // --- Edge creation (click node to start connecting, click another to finish) ---
@@ -775,38 +1076,141 @@ function buildBuildHtml(): string {
     cy.on('tap', 'node', (evt) => {
       const node = evt.target;
       if (connectSource && connectSource !== node) {
-        cy.add({
-          group: 'edges',
-          data: { source: connectSource.id(), target: node.id() },
-        });
-        connectSource.style('border-width', 0);
+        const srcId = connectSource.id();
+        const tgtId = node.id();
+        if (cy.edges().some(e =>
+          (e.data('source') === srcId && e.data('target') === tgtId) ||
+          (e.data('source') === tgtId && e.data('target') === srcId)
+        )) {
+          connectSource.removeClass('connecting');
+          connectSource = null;
+          cy.elements().unselect();
+          return;
+        }
+        pushUndo();
+        const srcKind = connectSource.data('kind');
+        const tgtKind = node.data('kind');
+        if (tgtKind === 'condition' && cy.edges().some(e => e.data('target') === tgtId)) {
+          connectSource.removeClass('connecting');
+          connectSource = null;
+          cy.elements().unselect();
+          return;
+        }
+        const srcCond = cy.edges().filter(e => e.data('target') === srcId).map(e => e.data('source')).filter(id => cy.getElementById(id).data('kind') === 'condition');
+        const tgtCond = cy.edges().filter(e => e.data('target') === tgtId).map(e => e.data('source')).filter(id => cy.getElementById(id).data('kind') === 'condition');
+        if (srcCond.some(cid => tgtCond.includes(cid))) {
+          connectSource.removeClass('connecting');
+          connectSource = null;
+          cy.elements().unselect();
+          return;
+        }
+        const edgeData = { source: srcId, target: tgtId };
+        if (srcKind === 'condition') {
+          const existing = cy.edges().filter(e => e.data('source') === connectSource.id());
+          if (existing.length >= 2) {
+            connectSource.removeClass('connecting');
+            connectSource = null;
+            cy.elements().unselect();
+            return;
+          }
+          if (existing.length === 0) {
+            edgeData.label = 'if';
+          } else {
+            edgeData.label = 'else';
+          }
+        }
+        cy.add({ group: 'edges', data: edgeData });
+        connectSource.removeClass('connecting');
         connectSource = null;
+        cy.elements().unselect();
+        node.select();
       } else {
-        if (connectSource) connectSource.style('border-width', 0);
+        if (connectSource) connectSource.removeClass('connecting');
         connectSource = node;
-        node.style({ 'border-width': 2, 'border-color': '#007acc', 'border-style': 'solid' });
+        node.addClass('connecting');
+        cy.elements().unselect();
+        node.select();
       }
     });
 
     cy.on('tap', (evt) => {
       if (evt.target === cy && connectSource) {
-        connectSource.style('border-width', 0);
+        connectSource.removeClass('connecting');
         connectSource = null;
+        cy.elements().unselect();
       }
     });
 
     // --- Double-click to rename ---
+    const renameInput = document.getElementById('rename-input');
+    const renameField = document.getElementById('rename-field');
+    let renameNode = null;
+    let renameTimeout = null;
+
     cy.on('dblclick', 'node', (evt) => {
-      const node = evt.target;
-      const newLabel = prompt('Node label:', node.data('label'));
-      if (newLabel) node.data('label', newLabel);
+      renameNode = evt.target;
+      labelEdge = null;
+      const bb = renameNode.renderedBoundingBox({ includeNodes: true });
+      const cyContainer = document.getElementById('canvas-area');
+      const cyOffset = cyContainer.getBoundingClientRect();
+      renameInput.style.left = (cyOffset.left + bb.x1) + 'px';
+      renameInput.style.top = (cyOffset.top + bb.y2 + 4) + 'px';
+      renameInput.style.display = 'block';
+      renameField.value = renameNode.data('label');
+      renameField.focus();
+      renameField.select();
+      clearTimeout(renameTimeout);
+    });
+
+    renameField.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        if (renameNode) {
+          const newLabel = renameField.value || renameNode.data('label');
+          if (renameNode.data('label') !== newLabel) pushUndo();
+          renameNode.data('label', newLabel);
+        }
+        if (labelEdge) {
+          const newLabel = renameField.value || '';
+          if ((labelEdge.data('label') || '') !== newLabel) pushUndo();
+          labelEdge.data('label', newLabel);
+        }
+        renameInput.style.display = 'none';
+        renameNode = null;
+        labelEdge = null;
+      } else if (e.key === 'Escape') {
+        renameInput.style.display = 'none';
+        renameNode = null;
+        labelEdge = null;
+      }
+    });
+
+    renameField.addEventListener('blur', () => {
+      renameTimeout = setTimeout(() => {
+        if (renameNode) {
+          const newLabel = renameField.value || renameNode.data('label');
+          if (renameNode.data('label') !== newLabel) pushUndo();
+          renameNode.data('label', newLabel);
+        }
+        if (labelEdge) {
+          const newLabel = renameField.value || '';
+          if ((labelEdge.data('label') || '') !== newLabel) pushUndo();
+          labelEdge.data('label', newLabel);
+        }
+        renameInput.style.display = 'none';
+        renameNode = null;
+        labelEdge = null;
+      }, 100);
     });
 
     // --- Right-click to delete ---
     cy.on('cxttap', 'node', (evt) => {
+      pushUndo();
+      evt.target.connectedEdges().remove();
       evt.target.remove();
+      if (connectSource === evt.target) connectSource = null;
     });
     cy.on('cxttap', 'edge', (evt) => {
+      pushUndo();
       evt.target.remove();
     });
 
@@ -815,15 +1219,177 @@ function buildBuildHtml(): string {
       if (e.target === cy) e.originalEvent.preventDefault();
     });
 
+    // --- Keyboard shortcuts ---
+    document.addEventListener('keydown', (e) => {
+      if (document.activeElement === renameField) {
+        // Allow undo/redo and Escape even while typing a name
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'y')) {
+          e.preventDefault();
+          if (e.key === 'y' || e.shiftKey) redo(); else undo();
+          return;
+        }
+        if (e.key === 'Escape') {
+          // Rename field handler dismisses the input; fall through to cy handler
+        } else {
+          return;
+        }
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const sel = cy.$(':selected');
+        if (sel.nonempty()) { pushUndo(); sel.forEach(function(el) { el.connectedEdges().remove(); }); sel.remove(); return; }
+        if (connectSource) { pushUndo(); connectSource.connectedEdges().remove(); connectSource.removeClass('connecting'); connectSource.remove(); connectSource = null; }
+      }
+      if (e.key === 'Escape') {
+        if (connectSource) { connectSource.removeClass('connecting'); connectSource = null; }
+        cy.elements().unselect();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        redo();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault();
+        cy.elements().select();
+      }
+    });
+
+    // --- Undo/redo ---
+    let undoStack = [];
+    let redoStack = [];
+    const MAX_UNDO = 50;
+    function snapshot() {
+      return JSON.stringify({ elements: cy.json().elements, counter: nodeCounter });
+    }
+    function pushUndo() {
+      undoStack.push(snapshot());
+      if (undoStack.length > MAX_UNDO) undoStack.shift();
+      redoStack = [];
+    }
+    function undo() {
+      if (!undoStack.length) return;
+      redoStack.push(snapshot());
+      restore(undoStack.pop());
+    }
+    function redo() {
+      if (!redoStack.length) return;
+      undoStack.push(snapshot());
+      restore(redoStack.pop());
+    }
+    function restore(snap) {
+      const data = JSON.parse(snap);
+      nodeCounter = data.counter;
+      cy.json({ elements: data.elements });
+    }
+
+    // --- Edge label: double-click edge ---
+    let labelEdge = null;
+    cy.on('dblclick', 'edge', (evt) => {
+      labelEdge = evt.target;
+      const mp = labelEdge.midpoint();
+      const cyContainer = document.getElementById('canvas-area');
+      const cyOffset = cyContainer.getBoundingClientRect();
+      const pan = cy.pan();
+      const zoom = cy.zoom();
+      const rx = (mp.x - pan.x) * zoom + cy.width() / 2;
+      const ry = (mp.y - pan.y) * zoom + cy.height() / 2;
+      renameInput.style.left = (cyOffset.left + rx - 40) + 'px';
+      renameInput.style.top = (cyOffset.top + ry - 12) + 'px';
+      renameInput.style.display = 'block';
+      renameField.value = labelEdge.data('label') || '';
+      renameField.focus();
+      renameField.select();
+      renameNode = null;
+      clearTimeout(renameTimeout);
+    });
+
     // --- Toolbar actions ---
     document.getElementById('clear-btn').onclick = () => {
+      pushUndo();
       cy.elements().remove();
       nodeCounter = 0;
+      connectSource = null;
+      renameNode = null;
+      labelEdge = null;
+      renameInput.style.display = 'none';
+      renameTimeout && clearTimeout(renameTimeout);
+      cy.zoom(1);
+      cy.pan({ x: 0, y: 0 });
+    };
+
+    function restoreChildren() {
+      const groups = new Map();
+      cy.nodes().filter(n => n.data('_parent')).forEach(n => {
+        const pid = n.data('_parent');
+        if (!groups.has(pid)) groups.set(pid, []);
+        groups.get(pid).push(n);
+      });
+      groups.forEach((children, pid) => {
+        const p = cy.getElementById(pid);
+        if (p.empty()) return;
+        children.sort((a, b) => a.position().x - b.position().x);
+        const total = children.length;
+        const childW = 70, gap = 20;
+        const span = total * childW + (total - 1) * gap;
+        const startX = p.position().x - span / 2 + childW / 2;
+        children.forEach((c, i) => {
+          c.position({ x: startX + i * (childW + gap), y: p.position().y + 12 });
+        });
+      });
+    }
+
+    document.getElementById('layout-btn').onclick = () => {
+      const edges = cy.edges();
+      if (edges.length === 0) {
+        const topLevel = cy.nodes().filter(n => !n.data('_parent'));
+        topLevel.forEach((node, i) => {
+          node.position({ x: snapToGrid(20), y: snapToGrid(20 + i * 60) });
+        });
+        restoreChildren();
+        fitWithMaxZoom(1.5);
+      } else {
+        const layout = cy.layout({
+          name: 'breadthfirst',
+          directed: true,
+          spacingFactor: 0.65,
+          nodeDimensionsIncludeLabels: true,
+          avoidOverlap: true,
+          animate: true,
+          animationDuration: 300,
+        });
+        layout.promiseOn('layoutstop').then(() => {
+          restoreChildren();
+          fitWithMaxZoom(1.5);
+        });
+        layout.run();
+      }
+    };
+
+    document.getElementById('fit-btn').onclick = () => {
+      fitWithMaxZoom();
+    };
+
+    document.getElementById('export-btn').onclick = () => {
+      const bg = getComputedStyle(document.getElementById('canvas-area')).backgroundColor || '#1e1e1e';
+      const png = cy.png({ full: true, bg: bg });
+      vscode.postMessage({ type: 'exportPNG', data: png });
+    };
+
+    document.getElementById('save-btn').onclick = () => {
+      const json = JSON.stringify({ elements: cy.json().elements, counter: nodeCounter });
+      vscode.postMessage({ type: 'saveGraph', data: json });
+    };
+
+    document.getElementById('load-btn').onclick = () => {
+      vscode.postMessage({ type: 'loadGraph' });
     };
 
     document.getElementById('generate-btn').onclick = () => {
       const graph = cyToWorkflowGraph();
-      const language = document.getElementById('language').value;
+      const language = document.getElementById('palette-language').value;
       vscode.postMessage({
         type: 'generateCode',
         graphJson: JSON.stringify(graph),
@@ -831,49 +1397,148 @@ function buildBuildHtml(): string {
       });
     };
 
+    document.getElementById('preview-btn').onclick = () => {
+      const graph = cyToWorkflowGraph();
+      const mermaid = graphToMermaid(graph);
+      document.getElementById('preview-content').textContent = mermaid;
+      document.getElementById('preview-panel').style.display = 'flex';
+    };
+
+    document.getElementById('preview-close').onclick = () => {
+      document.getElementById('preview-panel').style.display = 'none';
+    };
+
+    function graphToMermaid(graph) {
+      const lines = ['graph TD'];
+      const nodeIds = new Set(graph.nodes.map(n => n.id));
+
+      // Node definitions
+      for (const node of graph.nodes) {
+        if (node.kind === 'start') continue;
+        if (node.kind === 'end') continue;
+
+        var label = (node.label || '').replace(/\|/g, ' ').replace(/"/g, "'");
+        var shape;
+        switch (node.kind) {
+          case 'step': shape = '[' + label + ']'; break;
+          case 'invoke': shape = '[/' + label + '\\]'; break;
+          case 'parallel': case 'map': shape = '{{' + label + '}}'; break;
+          case 'wait': case 'waitForCallback': case 'createCallback': case 'waitForCondition': shape = '((' + label + '))'; break;
+          case 'condition': shape = '{' + label + '}'; break;
+          case 'runInChildContext': case 'withRetry': shape = '[[' + label + ']]'; break;
+          case 'promiseAll': case 'promiseAny': case 'promiseRace': case 'promiseAllSettled': shape = '{{' + label + '}}'; break;
+          default: shape = '[' + label + ']';
+        }
+        lines.push('  ' + node.id + shape);
+
+        // Branch nodes for parallel/map
+        if ((node.kind === 'parallel' || node.kind === 'map') && node.branches) {
+          var subId = 'sub_' + node.id;
+          lines.push('  subgraph ' + subId + '[" "]');
+          for (var bi = 0; bi < node.branches.length; bi++) {
+            var branch = node.branches[bi];
+            for (var bj = 0; bj < branch.nodes.length; bj++) {
+              var bn = branch.nodes[bj];
+              var blabel = (bn.label || '').replace(/\|/g, ' ').replace(/"/g, "'");
+              lines.push('    ' + bn.id + '[' + blabel + ']');
+            }
+          }
+          lines.push('  end');
+          lines.push('  style ' + subId + ' fill:transparent,stroke:#444,stroke-width:1px,stroke-dasharray:5 5');
+        }
+      }
+
+      // Edges
+      lines.push('');
+      if (graph.edges && graph.edges.length > 0) {
+        for (var ei = 0; ei < graph.edges.length; ei++) {
+          var edge = graph.edges[ei];
+          if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) continue;
+          var fnode = graph.nodes.find(function(n) { return n.id === edge.from; });
+          var tnode = graph.nodes.find(function(n) { return n.id === edge.to; });
+          if (fnode && fnode.kind === 'end') continue;
+          if (tnode && tnode.kind === 'start') continue;
+          var elabel = edge.label ? '|' + edge.label + '|' : '';
+          lines.push('  ' + edge.from + ' -->' + elabel + ' ' + edge.to);
+        }
+      } else {
+        // No edges: lay out nodes sequentially
+        var workflowNodes = graph.nodes.filter(function(n) { return n.kind !== 'start' && n.kind !== 'end'; });
+        for (var wi = 0; wi < workflowNodes.length; wi++) {
+          var from = workflowNodes[wi];
+          var to = workflowNodes[wi + 1];
+          if (to) {
+            lines.push('  ' + from.id + ' --> ' + to.id);
+          } else {
+            lines.push('  ' + from.id + ' --> node_end');
+          }
+        }
+        if (workflowNodes.length > 0) {
+          var hasStart = lines.some(function(l) { return l.indexOf('node_start -->') !== -1; });
+          if (!hasStart) {
+            lines.push('  node_start --> ' + workflowNodes[0].id);
+          }
+        }
+      }
+
+      return lines.join('\\n');
+    }
+
     // --- Convert Cytoscape graph to WorkflowGraph ---
     function cyToWorkflowGraph() {
       const nodes = [];
       const nodeMap = new Map();
+      const childMap = new Map();
 
-      // Find source node (no incoming edges)
       cy.nodes().forEach(n => {
         const id = n.data('id');
         const kind = n.data('kind');
         const label = n.data('label');
+        const parentId = n.data('_parent');
 
-        if (kind === 'condition') {
-          nodeMap.set(id, {
-            id, kind, label,
-            condition: label,
-            thenCount: 1,
-            thenReturns: false,
-          });
-        } else if (kind === 'parallel' || kind === 'map') {
-          nodeMap.set(id, {
-            id, kind, label,
-            branches: [],
-          });
-        } else {
-          nodeMap.set(id, { id, kind, label });
+        nodeMap.set(id, { id, kind, label, origLabel: label });
+
+        if (parentId) {
+          const node = nodeMap.get(id);
+          node._parent = parentId;
+          if (!childMap.has(parentId)) childMap.set(parentId, []);
+          childMap.get(parentId).push(node);
         }
       });
 
+      childMap.forEach((children, parentId) => {
+        const parent = nodeMap.get(parentId);
+        if (parent && (parent.kind === 'parallel' || parent.kind === 'map')) {
+          parent.branches = children.map(c => ({
+            name: c.label,
+            dynamic: false,
+            nodes: [{ id: c.id, kind: c.kind, label: c.label }],
+          }));
+        }
+      });
+
+      const rawEdges = [];
       cy.edges().forEach(e => {
-        const src = e.data('source');
-        const tgt = e.data('target');
-        if (nodeMap.has(src) && nodeMap.has(tgt)) {
-          nodeMap.get(src).target = nodeMap.get(tgt).label;
-        }
+        let srcId = e.data('source');
+        let tgtId = e.data('target');
+        if (!nodeMap.has(srcId) || !nodeMap.has(tgtId)) return;
+
+        const srcNode = nodeMap.get(srcId);
+        const tgtNode = nodeMap.get(tgtId);
+        if (srcNode._parent && nodeMap.has(srcNode._parent)) srcId = srcNode._parent;
+        if (tgtNode._parent && nodeMap.has(tgtNode._parent)) tgtId = tgtNode._parent;
+        if (srcId === tgtId) return;
+        if (nodeMap.get(srcId)._parent || nodeMap.get(tgtId)._parent) return;
+
+        rawEdges.push({ from: srcId, to: tgtId, label: (e.data('label') === 'else' ? 'no' : e.data('label')) || undefined });
       });
 
-      // Topological order
       const inDegree = new Map();
       const adj = new Map();
       nodeMap.forEach((_, id) => { inDegree.set(id, 0); adj.set(id, []); });
-      cy.edges().forEach(e => {
-        adj.get(e.data('source')).push(e.data('target'));
-        inDegree.set(e.data('target'), (inDegree.get(e.data('target')) || 0) + 1);
+      rawEdges.forEach(e => {
+        adj.get(e.from).push(e.to);
+        inDegree.set(e.to, (inDegree.get(e.to) || 0) + 1);
       });
 
       const queue = [];
@@ -888,9 +1553,95 @@ function buildBuildHtml(): string {
         });
       }
 
-      ordered.forEach(id => {
-        if (nodeMap.has(id)) nodes.push(nodeMap.get(id));
+      const topLevel = ordered.map(id => nodeMap.get(id)).filter(n => n && !n._parent);
+
+      const edgeAdj = new Map();
+      rawEdges.forEach(e => {
+        if (!edgeAdj.has(e.from)) edgeAdj.set(e.from, []);
+        edgeAdj.get(e.from).push(e.to);
       });
+
+      const condThenNodes = new Map();
+      const condElseNodes = new Map();
+      const condConvNodes = new Map();
+      for (let i = 0; i < topLevel.length; i++) {
+        const n = topLevel[i];
+        if (n.kind === 'condition') {
+          const condId = n.id;
+          const noEdge = rawEdges.find(e => e.from === condId && (e.label === 'no' || e.label === 'else'));
+          const noTargetId = noEdge ? noEdge.to : null;
+
+          const rawThen = new Set();
+          const rawElse = new Set();
+
+          const dfs = (startIds, resultSet) => {
+            const visited = new Set();
+            const stack = [...startIds];
+            while (stack.length > 0) {
+              const id = stack.pop();
+              if (visited.has(id)) continue;
+              visited.add(id);
+              const nd = nodeMap.get(id);
+              if (nd && !nd._parent) resultSet.add(id);
+              if (nd && nd.kind === 'condition') continue;
+              (edgeAdj.get(id) || []).forEach(nxt => {
+                if (!visited.has(nxt)) stack.push(nxt);
+              });
+            }
+          };
+
+          (edgeAdj.get(condId) || []).forEach(tgt => {
+            if (tgt !== noTargetId) dfs([tgt], rawThen);
+          });
+          if (noTargetId) dfs([noTargetId], rawElse);
+
+          const convSet = new Set();
+          rawThen.forEach(id => { if (rawElse.has(id)) convSet.add(id); });
+          convSet.forEach(id => { rawThen.delete(id); rawElse.delete(id); });
+
+          n.condition = n.label;
+          n.thenCount = Math.max(1, rawThen.size);
+          n.thenReturns = false;
+          condThenNodes.set(condId, rawThen);
+          condElseNodes.set(condId, rawElse);
+          condConvNodes.set(condId, convSet);
+        }
+      }
+
+      const thenIds = new Set();
+      const elseIds = new Set();
+      const convIds = new Set();
+      condThenNodes.forEach(s => s.forEach(id => thenIds.add(id)));
+      condElseNodes.forEach(s => s.forEach(id => elseIds.add(id)));
+      condConvNodes.forEach(s => s.forEach(id => convIds.add(id)));
+
+      const outputOrder = [];
+      const placed = new Set();
+      for (const n of topLevel) {
+        if (n.kind === 'condition') {
+          outputOrder.push(n);
+          placed.add(n.id);
+          const thenSet = condThenNodes.get(n.id);
+          const elseSet = condElseNodes.get(n.id);
+          const convSet = condConvNodes.get(n.id);
+          const pushGroup = (set) => {
+            if (!set) return;
+            for (const tn of topLevel) {
+              if (set.has(tn.id) && !placed.has(tn.id)) {
+                outputOrder.push(tn);
+                placed.add(tn.id);
+              }
+            }
+          };
+          pushGroup(thenSet);
+          pushGroup(elseSet);
+          pushGroup(convSet);
+        } else if (!thenIds.has(n.id) && !elseIds.has(n.id) && !convIds.has(n.id) && !placed.has(n.id)) {
+          outputOrder.push(n);
+          placed.add(n.id);
+        }
+      }
+      nodes.push(...outputOrder);
 
       return {
         name: 'workflow',
@@ -899,9 +1650,23 @@ function buildBuildHtml(): string {
           ...nodes,
           { id: 'node_end', kind: 'end', label: 'End' },
         ],
-        edges: [],
+        edges: rawEdges,
       };
     }
+
+    // --- Listen for extension messages (e.g. loaded graph) ---
+    window.addEventListener('message', (e) => {
+      const msg = e.data;
+      if (msg.type === 'loadGraphData') {
+        try {
+          const data = JSON.parse(msg.data);
+          nodeCounter = data.counter || 0;
+          cy.json({ elements: data.elements || [] });
+          undoStack = [];
+          redoStack = [];
+        } catch (_) {}
+      }
+    });
   </script>
 </body>
 </html>`
