@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-07-22
+
+### Added
+
+- **Build mode.** A visual workflow designer in the VS Code extension. Design the diagram first, then generate handler boilerplate.
+  - Drag-and-drop palette with 11 primitives filtered by language (TS/Python/Java/C#).
+  - Interactive canvas with click-to-connect edges, compound nodes for Parallel/Map, inline rename, delete, undo/redo.
+  - **Conditions** auto-label `if`/`else` edges, enforce edge limits (one predecessor, two outgoing), block duplicate/cross-branch edges and self-loops. Supports nested conditions and convergence (branches merging on a shared node).
+  - **Code generation** via shared codegen module (`packages/core/src/renderers/codegen.ts`) with topological sort, condition if/else branching, parallel/map branch assembly, edge routing, and variable name deduplication.
+  - Mermaid preview, save/load as JSON, export PNG, auto-arrange layout.
+  - Compound nodes stay at fixed size with dynamically centered children that follow when the parent is dragged.
+  - Arrange button stacks disconnected nodes vertically and restores children after layout.
+
 ## [0.5.0] - 2026-06-28
 
 ### Added

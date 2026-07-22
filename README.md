@@ -7,7 +7,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A520-green)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Visualize [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows. Static analysis turns your handler code into a flowchart, no deployment or execution required.
+Visualize and build [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows. Turn your handler code into a flowchart, or design a workflow from scratch and generate boilerplate code — no deployment or execution required.
 
 Supports **TypeScript/JavaScript**, **Python**, **Java**, and **C# (.NET)** runtimes.
 
@@ -46,7 +46,7 @@ graph LR
   style node_end fill:#5b8ab4,stroke:#4a7293,color:#e8edf2
 ```
 
-Read the [blog post](https://dev.to/gunnargrosch/visualizing-aws-lambda-durable-function-workflows-with-durable-viz-1838) for a full walkthrough with examples.
+Read the [blog post](https://dev.to/gunnargrosch/visualizing-aws-lambda-durable-function-workflows-with-durable-viz-1838) for a walkthrough of the View mode with examples.
 
 ## Table of Contents
 
@@ -63,13 +63,15 @@ Read the [blog post](https://dev.to/gunnargrosch/visualizing-aws-lambda-durable-
 
 ## Quick Start
 
-Run against any file containing a durable function handler:
+Run the CLI against any file containing a durable function handler:
 
 ```shell
 npx durable-viz examples/order-workflow.ts --open
 ```
 
 This parses the handler, extracts the workflow structure, and opens an interactive diagram in your browser.
+
+To use the **Build mode** workflow designer, install the [VS Code extension](#vs-code-extension) and run **Durable Viz: Build Workflow Diagram** from the command palette.
 
 Try the included examples:
 
@@ -93,7 +95,7 @@ npx durable-viz examples/OrderProcessor.cs --open
 
 ## VS Code Extension
 
-The extension renders the workflow diagram in a side panel next to your code.
+The extension has two modes: **View** (parse handler code and render a diagram) and **Build** (design a workflow from scratch and generate boilerplate).
 
 ### Install from Marketplace
 
@@ -114,7 +116,14 @@ npx @vscode/vsce package --no-dependencies
 code --install-extension durable-viz-*.vsix
 ```
 
-### Usage
+### Modes
+
+| Mode | Command | Direction |
+| --- | --- | --- |
+| **View** | `Durable Viz: Open Lambda Durable Function Workflow` | Code → Diagram. Parses the active file and renders a Mermaid flowchart. |
+| **Build** | `Durable Viz: Build Workflow Diagram` | Diagram → Code. Visual canvas for designing workflows and generating handler boilerplate. |
+
+### View Mode Usage
 
 1. Open a file containing a durable function handler.
 2. Open the command palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
@@ -122,7 +131,7 @@ code --install-extension durable-viz-*.vsix
 
 The diagram appears in a side panel. It auto-refreshes when you save the file.
 
-### Features
+### View Mode Features
 
 | Feature | Description |
 | --- | --- |
@@ -134,6 +143,40 @@ The diagram appears in a side panel. It auto-refreshes when you save the file.
 | **Direction toggle** | Switch between top-down (TD) and left-right (LR) layout |
 | **Save PNG** | Export the diagram as a high-resolution transparent PNG |
 | **Source view** | View the raw Mermaid syntax or JSON graph |
+
+### Build Mode
+
+Build mode is a visual workflow designer that runs in a VS Code webview panel. It does not require a source file — the canvas is blank when you start.
+
+#### Workflow
+
+- Drag durable primitives from the palette onto an interactive canvas
+- Connect nodes by clicking them in sequence to create edges. Conditions auto-label `if`/`else` branches.
+- Both branches can converge on the same node (convergence) and continue after the if/else
+- Nest steps inside **Parallel** and **Map** nodes (drag onto the compound parent)
+- Double-click any node to rename it with an inline input
+- Right-click a node or edge to delete it
+- Select a target language from the palette dropdown
+- Click **Generate Code** for boilerplate handler code in your chosen language
+
+Generated code opens in a new editor tab. The palette language selector filters the available primitives and determines the output language.
+
+#### Features
+
+| Feature | Description |
+| --- | --- |
+| **Drag-and-drop palette** | 11 durable primitives, filtered by language (TS/Python/Java/C#) |
+| **Interactive canvas** | Click-to-connect edges, drag to reposition nodes |
+| **Compound nodes** | Parallel and Map nodes can contain child branches |
+| **Inline rename** | Double-click any node to rename in-place (no prompt dialogs) |
+| **Delete** | Remove nodes and edges via right-click context menu or <kbd>Del</kbd> key |
+| **Undo/redo** | <kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> for full edit history |
+| **Code generation** | Generate handler boilerplate in TypeScript, Python, Java, or C# |
+| **Condition support** | Auto-labeled if/else edges, convergence detection, nested conditions |
+| **Mermaid preview** | Overlay panel showing a Mermaid diagram of the current canvas |
+| **Save/load** | Save the canvas as a JSON file and reload it later |
+| **Export PNG** | Export the canvas as a high-resolution transparent PNG |
+| **Auto-arrange** | Automatic layout algorithm to untangle the graph |
 
 The extension activates for `.ts`, `.js`, `.py`, `.java`, and `.cs` files. A toolbar button also appears in the editor title bar for these file types.
 
@@ -249,7 +292,7 @@ Regex-based parser. Finds `DurableFunction.WrapAsync` calls to locate the workfl
 
 ### Conditionals
 
-All three parsers detect `if` statements that wrap durable calls and represent them as condition (diamond) nodes in the graph. When the `if` block ends with a `return`, the "yes" branch connects to End instead of falling through.
+All parsers detect `if` statements that wrap durable calls and represent them as condition (diamond) nodes in the graph. When the `if` block ends with a `return`, the "yes" branch connects to End instead of falling through.
 
 ## Examples
 
@@ -286,13 +329,14 @@ durable-viz/
         graph.ts                  # WorkflowGraph model + edge builder
         renderers/
           mermaid.ts              # Mermaid flowchart renderer
+          codegen.ts              # Handler code generation (TS/Python/Java/C#)
         index.ts                  # Public API
     cli/                          # npx CLI
       src/
         bin.ts                    # CLI entry point + browser HTML template
     vscode/                       # VS Code extension
       src/
-        extension.ts              # Webview panel + click-to-navigate
+         extension.ts              # Webview panels for View and Build modes
   examples/                       # Sample handlers for each language
   pnpm-workspace.yaml
   tsconfig.base.json
@@ -303,9 +347,10 @@ durable-viz/
 The core package is language-agnostic above the parser layer. Adding a new language means implementing the `Parser` interface (two methods: `extensions` and `parseFile`). The graph model, edge builder, and all renderers are shared.
 
 ```
-[source file] → Parser → WorkflowGraph → Renderer → [output]
-                  │                          │
-          TS / Python / Java / C#       Mermaid / JSON
+View Mode:   [source file] → Parser → WorkflowGraph → Renderer → [diagram / JSON]
+Build Mode:  [canvas] → cyToWorkflowGraph() → WorkflowGraph → generateCode() → [boilerplate]
+                              │                          │
+                      TS / Python / Java / C#       Mermaid / JSON / Code
 ```
 
 ## Limitations
