@@ -295,12 +295,13 @@ function extractNodes(
 
     // Check for helper method calls
     if (!matched) {
-      // Check for static withRetry(ctx, ...) call
-      const withRetryPattern = new RegExp(`withRetry\\s*\\(\\s*(${contextNames.join('|')})`)
-      if (withRetryPattern.test(line)) {
+      // Check for static withRetry(ctx, ...) or instance ctx.withRetry(...)
+      const withRetryStatic = new RegExp(`withRetry\\s*\\(\\s*(${contextNames.join('|')})`)
+      const withRetryInstance = new RegExp(`(${contextNames.join('|')})\\s*\\.\\s*withRetry\\s*\\(`)
+      if (withRetryStatic.test(line) || withRetryInstance.test(line)) {
         matched = true
         const searchText = lines.slice(i, i + 5).join(' ')
-        const nameMatch = searchText.match(/withRetry\s*\(\s*\w+\s*,\s*"([^"]+)"/)
+        const nameMatch = searchText.match(/(?:withRetry|\.withRetry)\s*\([^,]*,\s*"([^"]+)"/)
         const config = extractJavaConfig(lines, i)
         nodes.push({
           id: nextId('retry'),
