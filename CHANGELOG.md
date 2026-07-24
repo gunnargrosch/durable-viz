@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.6.1] - 2026-07-24
 
+### Added
+
+- **.NET config feature extraction.** C# parser now detects `StepSemantics.AtMostOncePerRetry` from `StepConfig` and `TenantId` from `InvokeConfig`.
+- **.NET codegen for config features.** C# codegen emits `StepConfig` and `InvokeConfig` with semantics and tenant isolation when present.
+
+### Changed
+
+- **.NET SDK GA compatibility.** Verified all 9 primitives against the .NET Durable Execution SDK v1.0.0.
+- **Updated package READMEs.** CLI and VS Code extension READMEs now list all four languages (including C#), reflect Java GA status, and document Build mode.
+- **Config feature table.** Step semantics and tenant isolation now marked as supported for .NET.
+
 ### Fixed
 
 - **Java parser:** `withRetry` is now detected in both the old standalone form (`withRetry(ctx, ...)`) and the new instance method form (`ctx.withRetry(...)`) introduced in Java SDK v2.0.0.

@@ -232,7 +232,7 @@ The parser detects all durable execution SDK primitives.
 | Create Callback | `context.createCallback()` | `context.create_callback()` | `ctx.createCallback()` | `ctx.CreateCallbackAsync()` |
 | Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | `ctx.waitForCondition()` | `ctx.WaitForConditionAsync()` |
 | Child Context | `context.runInChildContext()` | `context.run_in_child_context()` | `ctx.runInChildContext()` | `ctx.RunInChildContextAsync()` |
-| With Retry | `withRetry(context, ...)` | `with_retry(context, ...)` | `withRetry(ctx, ...)` | via `StepConfig` |
+| With Retry | `withRetry(context, ...)` | `with_retry(context, ...)` | `ctx.withRetry(...)` | via `StepConfig` |
 
 TypeScript also detects `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`.
 
@@ -246,8 +246,8 @@ The parser extracts configuration metadata and displays it as annotations on dia
 | --- | :---: | :---: | :---: | :---: |
 | Nesting type (`FLAT`/`NESTED`) | ✓ | ✓ | ✓ | ✓ |
 | Completion config | ✓ | ✓ | ✓ | ✓ |
-| Step semantics (`AtMostOncePerRetry`) | ✓ | ✓ | ✓ | — |
-| Tenant isolation (`tenantId`) | ✓ | ✓ | ✓ | — |
+| Step semantics (`AtMostOncePerRetry`) | ✓ | ✓ | ✓ | ✓ |
+| Tenant isolation (`tenantId`) | ✓ | ✓ | ✓ | ✓ |
 
 ### Visual Encoding
 

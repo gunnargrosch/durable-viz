@@ -161,4 +161,20 @@ describe('CSharpParser', () => {
     assert.ok(map, 'Should detect MapAsync')
     assert.equal(map.label, 'process')
   })
+
+  it('extracts stepSemantics from StepConfig', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'StepConfig.cs'))
+
+    const step = graph.nodes.find((n) => n.label === 'idempotent-step')
+    assert.ok(step, 'Should find step node')
+    assert.equal(step.stepSemantics, 'AtMostOncePerRetry')
+  })
+
+  it('extracts tenantId from InvokeConfig', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'StepConfig.cs'))
+
+    const invoke = graph.nodes.find((n) => n.label === 'tenant-invoke')
+    assert.ok(invoke, 'Should find invoke node')
+    assert.equal(invoke.tenantId, 'tenant-abc-123')
+  })
 })
