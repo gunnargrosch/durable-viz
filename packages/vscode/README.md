@@ -1,28 +1,38 @@
 # Durable Viz
 
-Visualize [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows directly in VS Code. Static analysis turns your handler code into an interactive flowchart, no deployment or execution required.
+Visualize and build [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows in VS Code.
 
-Supports **TypeScript/JavaScript**, **Python**, and **Java** runtimes.
+- **View mode:** Parse handler code and render an interactive flowchart.
+- **Build mode:** Design workflows from scratch and generate handler boilerplate.
+
+Supports **TypeScript/JavaScript**, **Python**, **Java**, and **C# (.NET)** runtimes.
 
 ## Features
 
+### View Mode
+
 - **Interactive diagram.** See your durable function as a flowchart in a side panel.
-- **Scroll zoom.** Scroll wheel to zoom in/out, zooms toward cursor.
-- **Click-drag pan.** Click and drag to move around the diagram.
-- **Click-to-navigate.** Click any node to jump to that line in the source file.
-- **Auto-refresh.** Diagram updates when you save the file.
-- **Direction toggle.** Switch between top-down (TD) and left-right (LR) layout.
-- **Save PNG.** Export the diagram as a high-resolution transparent PNG.
-- **Source view.** View the raw Mermaid syntax or JSON graph.
-- **All primitives.** Step, invoke, parallel, map, wait, callbacks, conditions, child contexts.
+- **Scroll zoom** and **click-drag pan**.
+- **Click-to-navigate** to source lines.
+- **Auto-refresh** on file save.
+- **Direction toggle** (TD/LR), **PNG export**, **source view** (Mermaid/JSON).
+
+### Build Mode
+
+- **Drag-and-drop palette** with 11 primitives filtered by language.
+- **Click-to-connect edges.** Conditions auto-label `if`/`else` branches.
+- **Compound nodes** for Parallel/Map with drag-to-nest.
+- **Code generation** in TypeScript, Python, Java, and C#.
+- **Mermaid preview**, **save/load JSON**, **undo/redo**.
 
 ## Usage
 
-1. Open a file containing a durable function handler.
-2. Open the command palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
-3. Run **Durable Viz: Open Lambda Durable Function Workflow**.
+| Mode | Command |
+| --- | --- |
+| **View** | `Durable Viz: Open Lambda Durable Function Workflow` |
+| **Build** | `Durable Viz: Build Workflow Diagram` |
 
-The diagram appears in a side panel next to your code. A toolbar button also appears in the editor title bar for supported file types.
+A toolbar button also appears in the editor title bar for `.ts`, `.js`, `.py`, `.java`, and `.cs` files.
 
 ## Supported Languages
 
@@ -31,52 +41,12 @@ The diagram appears in a side panel next to your code. A toolbar button also app
 | TypeScript / JavaScript | `withDurableExecution()` | `@aws/durable-execution-sdk-js` |
 | Python | `@durable_execution` decorator | `aws-durable-execution-sdk-python` |
 | Java | `extends DurableHandler` | `aws-durable-execution-sdk-java` |
-
-## Detected Primitives
-
-Java SDK support is in preview with some primitives still in development.
-
-| Primitive | TypeScript | Python | Java (preview) |
-| --- | --- | --- | --- |
-| Step | `context.step()` | `context.step()` | `ctx.step()` |
-| Invoke | `context.invoke()` | `context.invoke()` | `ctx.invoke()` |
-| Parallel | `context.parallel()` | `context.parallel()` | *in development* |
-| Map | `context.map()` | `context.map()` | *in development* |
-| Wait | `context.wait()` | `context.wait()` | `ctx.wait()` |
-| Wait for Callback | `context.waitForCallback()` | `context.wait_for_callback()` | *in development* |
-| Create Callback | `context.createCallback()` | `context.create_callback()` | `ctx.createCallback()` |
-| Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | *in development* |
-| Child Context | `context.runInChildContext()` | `context.run_in_child_context()` | `ctx.runInChildContext()` |
-
-## Visual Encoding
-
-Each primitive type has a distinct shape and color:
-
-| Node | Shape | Color |
-| --- | --- | --- |
-| Start / End | Stadium | Blue |
-| Step | Rectangle | Green |
-| Invoke | Trapezoid | Amber |
-| Parallel / Map | Hexagon | Purple |
-| Wait / Callback | Circle | Red |
-| Condition | Diamond | Indigo |
-| Child Context | Subroutine | Teal |
-
-Parallel branches are grouped inside a dashed border. Conditional branches show "yes" and "no" edges.
-
-## CLI
-
-This extension is part of [durable-viz](https://github.com/gunnargrosch/durable-viz), which also includes a CLI:
-
-```shell
-npx durable-viz handler.ts --open
-```
+| C# (.NET) | `DurableFunction.WrapAsync` | `Amazon.Lambda.DurableExecution` |
 
 ## Links
 
 - [GitHub Repository](https://github.com/gunnargrosch/durable-viz)
 - [AWS Lambda Durable Functions Documentation](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html)
-- [Report an Issue](https://github.com/gunnargrosch/durable-viz/issues)
 
 ## License
 

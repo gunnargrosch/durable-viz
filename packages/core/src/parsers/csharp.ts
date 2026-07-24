@@ -2,7 +2,7 @@
  * C# parser for AWS Lambda Durable Execution SDK (.NET).
  *
  * Uses regex-based parsing to find durable workflow functions and extract
- * primitives. The .NET SDK is in preview (0.x) and uses Async-suffixed
+ * primitives. The .NET SDK (v1.0.0, GA) uses Async-suffixed
  * methods on IDurableContext:
  *
  *   ctx.StepAsync(...)              → step
@@ -204,6 +204,8 @@ function extractNodes(
           const invokeText = joinCallLines(lines, i)
           const fnMatch = invokeText.match(/InvokeAsync\s*<\s*[\w,\s]+\s*>\s*\(\s*(?:functionName:\s*)?\s*"([^"]+)"/)
           if (fnMatch) node.target = fnMatch[1]
+          const invokeConfig = extractCSharpConfig(lines, i)
+          if (invokeConfig.tenantId) node.tenantId = invokeConfig.tenantId
         }
 
         if (info.kind === 'parallel' || info.kind === 'map') {
@@ -211,11 +213,17 @@ function extractNodes(
           const config = extractCSharpConfig(lines, i)
           if (config.nestingType) node.nestingType = config.nestingType
           if (config.completionConfig) node.completionConfig = config.completionConfig
+          if (config.stepSemantics) node.stepSemantics = config.stepSemantics
         }
 
         if (info.kind === 'runInChildContext') {
           const config = extractCSharpConfig(lines, i)
           if (config.nestingType) node.nestingType = config.nestingType
+        }
+
+        if (info.kind === 'step') {
+          const config = extractCSharpConfig(lines, i)
+          if (config.stepSemantics) node.stepSemantics = config.stepSemantics
         }
 
         nodes.push(node)
@@ -316,6 +324,8 @@ function extractCSharpBranches(lines: string[], startLine: number): WorkflowBran
 interface CSharpConfigFlags {
   nestingType?: string
   completionConfig?: string
+  stepSemantics?: string
+  tenantId?: string
 }
 
 function extractCSharpConfig(lines: string[], lineIdx: number): CSharpConfigFlags {
@@ -327,6 +337,12 @@ function extractCSharpConfig(lines: string[], lineIdx: number): CSharpConfigFlag
 
   const completion = searchText.match(/\.CompletionConfig\s*=\s*CompletionConfig\.(\w+)\(\s*\)/)
   if (completion) flags.completionConfig = completion[1].replace(/([A-Z])/g, ' $1').toLowerCase().trim()
+
+  const semantics = searchText.match(/Semantics\s*=\s*StepSemantics\.(\w+)/)
+  if (semantics) flags.stepSemantics = semantics[1]
+
+  const tenant = searchText.match(/TenantId\s*=\s*"([^"]+)"/)
+  if (tenant) flags.tenantId = tenant[1]
 
   return flags
 }

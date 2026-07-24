@@ -562,6 +562,17 @@ describe('Config features', () => {
     const code = generateCode(makeGraph('test', [makeNode('a', 'runInChildContext', 'child', { nestingType: 'FLAT' })]), { language: 'typescript' })
     assertContains(code, 'isVirtual: true')
   })
+
+  it('C# stepSemantics in StepConfig', () => {
+    const code = generateCode(makeGraph('test', [makeNode('a', 'step', 'idempotent', { stepSemantics: 'AtMostOncePerRetry' })]), { language: 'csharp' })
+    assertContains(code, 'StepSemantics.AtMostOncePerRetry')
+  })
+
+  it('C# tenantId in InvokeConfig', () => {
+    const code = generateCode(makeGraph('test', [makeNode('a', 'invoke', 'tenant-invoke', { tenantId: 'tenant-abc-123' })]), { language: 'csharp' })
+    assertContains(code, 'InvokeConfig')
+    assertContains(code, 'tenant-abc-123')
+  })
 })
 
 describe('Missing imports (regression)', () => {

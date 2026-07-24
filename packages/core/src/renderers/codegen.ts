@@ -720,10 +720,18 @@ function genCSharpNode(
   generatedIds.add(node.id)
 
   switch (node.kind) {
-    case 'step':
-      return `${pad}var ${vname} = await ctx.StepAsync(\n${pad}${IDENT}async (_, _) => {\n${pad}${IDENT}${IDENT}// TODO: implement ${node.label}\n${pad}${IDENT}${IDENT}await Task.CompletedTask;\n${pad}${IDENT}${IDENT}return null;\n${pad}${IDENT}},\n${pad}${IDENT}name: "${node.label}");`
-    case 'invoke':
-      return `${pad}var ${vname} = await ctx.InvokeAsync<object, object>(\n${pad}${IDENT}functionName: "${node.target ?? 'MyFunction'}",\n${pad}${IDENT}payload: new { },\n${pad}${IDENT}name: "${node.label}");`
+    case 'step': {
+      const sem = node.stepSemantics === 'AtMostOncePerRetry'
+        ? `,\n${pad}${IDENT}config: new StepConfig { Semantics = StepSemantics.AtMostOncePerRetry })`
+        : ')'
+      return `${pad}var ${vname} = await ctx.StepAsync(\n${pad}${IDENT}async (_, _) => {\n${pad}${IDENT}${IDENT}// TODO: implement ${node.label}\n${pad}${IDENT}${IDENT}await Task.CompletedTask;\n${pad}${IDENT}${IDENT}return null;\n${pad}${IDENT}},\n${pad}${IDENT}name: "${node.label}"${sem};`
+    }
+    case 'invoke': {
+      const tenant = node.tenantId
+        ? `,\n${pad}${IDENT}config: new InvokeConfig { TenantId = "${node.tenantId}" })`
+        : ')'
+      return `${pad}var ${vname} = await ctx.InvokeAsync<object, object>(\n${pad}${IDENT}functionName: "${node.target ?? 'MyFunction'}",\n${pad}${IDENT}payload: new { },\n${pad}${IDENT}name: "${node.label}"${tenant};`
+    }
     case 'wait':
       return `${pad}await ctx.WaitAsync(\n${pad}${IDENT}TimeSpan.FromSeconds(30),\n${pad}${IDENT}name: "${node.label}");`
     case 'waitForCallback':
