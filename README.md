@@ -9,7 +9,7 @@
 
 Visualize and build [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows. Turn your handler code into a flowchart, or design a workflow from scratch and generate boilerplate code — no deployment or execution required.
 
-Supports **TypeScript/JavaScript**, **Python**, **Java**, and **C# (.NET)** runtimes.
+Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, and **Rust** runtimes.
 
 ```mermaid
 graph LR
@@ -91,6 +91,9 @@ npx durable-viz examples/OrderProcessorFutures.java --open
 # C# (.NET)
 npx durable-viz examples/OrderWorkflow.cs --open
 npx durable-viz examples/OrderProcessor.cs --open
+
+# Rust
+npx durable-viz examples/order_workflow.rs --open
 ```
 
 ## VS Code Extension
@@ -165,20 +168,20 @@ Generated code opens in a new editor tab. The palette language selector filters 
 
 | Feature | Description |
 | --- | --- |
-| **Drag-and-drop palette** | 11 durable primitives, filtered by language (TS/Python/Java/C#) |
+| **Drag-and-drop palette** | 15 durable primitives, filtered by language (TS/Python/Java/C#/Rust) |
 | **Interactive canvas** | Click-to-connect edges, drag to reposition nodes |
 | **Compound nodes** | Parallel and Map nodes can contain child branches |
 | **Inline rename** | Double-click any node to rename in-place (no prompt dialogs) |
 | **Delete** | Remove nodes and edges via right-click context menu or <kbd>Del</kbd> key |
 | **Undo/redo** | <kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> for full edit history |
-| **Code generation** | Generate handler boilerplate in TypeScript, Python, Java, or C# |
+| **Code generation** | Generate handler boilerplate in TypeScript, Python, Java, C#, or Rust |
 | **Condition support** | Auto-labeled if/else edges, convergence detection, nested conditions |
 | **Mermaid preview** | Overlay panel showing a Mermaid diagram of the current canvas |
 | **Save/load** | Save the canvas as a JSON file and reload it later |
 | **Export PNG** | Export the canvas as a high-resolution transparent PNG |
 | **Auto-arrange** | Automatic layout algorithm to untangle the graph |
 
-The extension activates for `.ts`, `.js`, `.py`, `.java`, and `.cs` files. A toolbar button also appears in the editor title bar for these file types.
+The extension activates for `.ts`, `.js`, `.py`, `.java`, `.cs`, and `.rs` files. A toolbar button also appears in the editor title bar for these file types.
 
 ## CLI Reference
 
@@ -221,33 +224,36 @@ durable-viz handler.ts --json
 
 The parser detects all durable execution SDK primitives.
 
-| Primitive | TypeScript | Python | Java | C# (.NET) |
-| --- | --- | --- | --- | --- |
-| Step | `context.step()` | `context.step()` | `ctx.step()` | `ctx.StepAsync()` |
-| Invoke | `context.invoke()` | `context.invoke()` | `ctx.invoke()` | `ctx.InvokeAsync()` |
-| Parallel | `context.parallel()` | `context.parallel()` | `ctx.parallel()` | `ctx.ParallelAsync()` |
-| Map | `context.map()` | `context.map()` | `ctx.map()` | `ctx.MapAsync()` |
-| Wait | `context.wait()` | `context.wait()` | `ctx.wait()` | `ctx.WaitAsync()` |
-| Wait for Callback | `context.waitForCallback()` | `context.wait_for_callback()` | `ctx.waitForCallback()` | `ctx.WaitForCallbackAsync()` |
-| Create Callback | `context.createCallback()` | `context.create_callback()` | `ctx.createCallback()` | `ctx.CreateCallbackAsync()` |
-| Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | `ctx.waitForCondition()` | `ctx.WaitForConditionAsync()` |
-| Child Context | `context.runInChildContext()` | `context.run_in_child_context()` | `ctx.runInChildContext()` | `ctx.RunInChildContextAsync()` |
-| With Retry | `withRetry(context, ...)` | `with_retry(context, ...)` | `ctx.withRetry(...)` | via `StepConfig` |
+| Primitive | TypeScript | Python | Java | C# (.NET) | Rust |
+| --- | --- | --- | --- | --- | --- |
+| Step | `context.step()` | `context.step()` | `ctx.step()` | `ctx.StepAsync()` | `ctx.step()` |
+| Invoke | `context.invoke()` | `context.invoke()` | `ctx.invoke()` | `ctx.InvokeAsync()` | `ctx.invoke()` |
+| Parallel | `context.parallel()` | `context.parallel()` | `ctx.parallel()` | `ctx.ParallelAsync()` | `ctx.parallel()` |
+| Map | `context.map()` | `context.map()` | `ctx.map()` | `ctx.MapAsync()` | `ctx.map()` |
+| Wait | `context.wait()` | `context.wait()` | `ctx.wait()` | `ctx.WaitAsync()` | `ctx.wait()` |
+| Wait for Callback | `context.waitForCallback()` | `context.wait_for_callback()` | `ctx.waitForCallback()` | `ctx.WaitForCallbackAsync()` | `ctx.wait_for_callback()` |
+| Create Callback | `context.createCallback()` | `context.create_callback()` | `ctx.createCallback()` | `ctx.CreateCallbackAsync()` | `ctx.create_callback()` |
+| Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | `ctx.waitForCondition()` | `ctx.WaitForConditionAsync()` | `ctx.wait_for_condition()` |
+| Child Context | `context.runInChildContext()` | `context.run_in_child_context()` | `ctx.runInChildContext()` | `ctx.RunInChildContextAsync()` | `ctx.run_in_child_context()` |
+| With Retry | `withRetry(context, ...)` | `with_retry(context, ...)` | `ctx.withRetry(...)` | via `StepConfig` | `ctx.with_retry()` |
 
 TypeScript also detects `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`.
 
 Java also detects `DurableFuture.allOf(futures...)` and `DurableFuture.anyOf(futures...)` as promise combinators.
 
+Rust also detects the concurrency combinators `ctx.join_all()`, `ctx.try_join_all()`, `ctx.select_ok()`, and `ctx.race()`, plus the `.future()` and `.spawn()` builder modifiers.
+
 ### Config-Level Features
 
 The parser extracts configuration metadata and displays it as annotations on diagram nodes:
 
-| Feature | TypeScript | Python | Java | C# |
-| --- | :---: | :---: | :---: | :---: |
-| Nesting type (`FLAT`/`NESTED`) | ✓ | ✓ | ✓ | ✓ |
-| Completion config | ✓ | ✓ | ✓ | ✓ |
-| Step semantics (`AtMostOncePerRetry`) | ✓ | ✓ | ✓ | ✓ |
-| Tenant isolation (`tenantId`) | ✓ | ✓ | ✓ | ✓ |
+| Feature | TypeScript | Python | Java | C# | Rust |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| Nesting type (`FLAT`/`NESTED`) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Completion config | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Step semantics (`AtMostOncePerRetry`) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Tenant isolation (`tenantId`) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Concurrency limit (`maxConcurrency`) | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 ### Visual Encoding
 
@@ -288,7 +294,11 @@ Regex-based parser. Finds classes extending `DurableHandler` and extracts `ctx.<
 
 ### C# (.NET)
 
-Regex-based parser. Finds `DurableFunction.WrapAsync` calls to locate the workflow function, then extracts `ctx.<Method>Async()` calls from the workflow body. Supports both the **executable** model (`Main` + `LambdaBootstrap`) and the **class-library** model (`[assembly: LambdaSerializer]`). Extracts names from `name:` named arguments and detects `DurableBranch<T>` patterns for parallel branches. Handles Allman-style braces (common C# convention) for `if`/`else` condition detection.
+Regex-based parser. Finds `DurableFunction.WrapAsync` calls to locate the workflow function, then extracts `ctx.<Method>Async()` calls from the workflow body. Supports both the **executable** model (`Main` + `LambdaBootstrap`) and the **class-library** model (`[assembly: LambdaSerializer]`), plus the **Annotations** model (`[DurableExecution]` attribute on a method with an `IDurableContext` parameter). Extracts names from `name:` named arguments and detects `DurableBranch<T>` patterns for parallel branches. Handles Allman-style braces (common C# convention) for `if`/`else` condition detection.
+
+### Rust
+
+Regex-based parser. Finds `durable::run(handler)` entry points (also `run_with_options` and `wrap`), resolves the `use aws_durable_execution_sdk as <alias>;` crate alias, and extracts the fluent builder chain: `ctx.step(..).name("greet").await?`. Handles rustfmt's split style (`ctx` on one line, `.step(` on the next) and the turbofish generics on `invoke::<T, _>` / `wait_for_callback::<T, _, _>`. Names are resolved in layers: string literal, local `let` constant propagation, then identifier fallback. Branch names come from `Branch::new("name", ..)`, and the concurrency combinators `join_all`, `try_join_all`, `select_ok`, and `race` map to the promise-combinator kinds.
 
 ### Conditionals
 
@@ -308,6 +318,7 @@ The `examples/` directory contains sample handlers for each language:
 | `OrderProcessorFutures.java` | Java | step, parallel, map, invoke, runInChildContext, withRetry, allOf, anyOf, config features |
 | `OrderWorkflow.cs` | C# | step, parallel, wait, waitForCallback, condition |
 | `OrderProcessor.cs` | C# | step, parallel, wait, invoke, waitForCallback, condition |
+| `order_workflow.rs` | Rust | step, parallel, wait, waitForCallback, condition, maxConcurrency |
 
 ```shell
 npx durable-viz examples/order-workflow.ts --open
@@ -326,10 +337,11 @@ durable-viz/
           python.ts               # Python parser (regex)
           java.ts                 # Java parser (regex)
           csharp.ts               # C# parser (regex)
+          rust.ts                 # Rust parser (regex)
         graph.ts                  # WorkflowGraph model + edge builder
         renderers/
           mermaid.ts              # Mermaid flowchart renderer
-          codegen.ts              # Handler code generation (TS/Python/Java/C#)
+          codegen.ts              # Handler code generation (TS/Python/Java/C#/Rust)
         index.ts                  # Public API
     cli/                          # npx CLI
       src/

@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] - 2026-08-25
+
+### Added
+
+- **Rust parser** for the [AWS Durable Execution SDK for Rust](https://github.com/aws/aws-durable-execution-sdk-rust) (preview, crate `aws-durable-execution-sdk`). Detects the fluent builder API (`ctx.step(..).name("greet").await?`), resolves the `use aws_durable_execution_sdk as <alias>;` crate alias, and handles rustfmt's split style (`ctx` on one line, `.step(` on the next) plus turbofish generics. Names resolve in layers: string literal, local `let` constant propagation, identifier fallback. Concurrency combinators (`join_all`, `try_join_all`, `select_ok`, `race`) map to the promise-combinator kinds.
+- **Rust code generation.** The builder now emits a full `#[tokio::main]`/`durable::run` handler with per-primitive builder snippets, including `Branch::new(...)`, `.nesting()`, `.completion()`, `.max_concurrency()`, `.tenant_id()`, `.retry_strategy()`, and the combinator calls.
+- **.NET Lambda Annotations model.** C# parser now detects the `[DurableExecution]` attribute model in addition to `DurableFunction.WrapAsync`.
+- **Concurrency limit (`maxConcurrency`).** Parsed across all five languages, rendered as a `concurrency N` annotation, and emitted in TypeScript, C#, and Rust codegen.
+- **Promise combinators in the builder.** Four new palette primitives (Join All, Any, Race, All Settled) for TypeScript and Rust.
+- **Open VSX publishing.** The release workflow publishes to the Open VSX Registry alongside the VS Code Marketplace via the `ovsx` CLI.
+- **ESLint.** Added a flat ESLint config with `typescript-eslint` and a `lint` script per package, wired into CI.
+- Two Rust examples: `order_workflow.rs` (basic) and `order_workflow_config.rs` (config features and combinators).
+
+### Changed
+
+- Updated all three READMEs (repo, CLI, extension) for Rust support, the annotations model, and `maxConcurrency`.
+
+### Fixed
+
+- Removed unused variables and imports surfaced by the new lint pass across `core` and `vscode`.
+- CLI `--version` now reports the actual package version (was hardcoded to `0.1.3`).
+
 ## [0.6.1] - 2026-07-24
 
 ### Added

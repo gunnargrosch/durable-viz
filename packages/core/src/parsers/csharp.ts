@@ -94,6 +94,24 @@ function findWorkflowFunctionName(source: string): string | null {
 }
 
 /**
+ * Find the workflow method name from the Lambda Annotations model.
+ * Pattern: [DurableExecution(...)] decorating a method whose signature
+ * contains an IDurableContext parameter. Attributes may appear above in any
+ * order (e.g. [LambdaFunction] then [DurableExecution]).
+ */
+function findAnnotatedWorkflowFunction(source: string): string | null {
+  const lines = source.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].includes('[DurableExecution')) continue
+    for (let j = i; j < Math.min(i + 4, lines.length); j++) {
+      const sigMatch = lines[j].match(/\b([A-Za-z_]\w*)\s*\([^)]*IDurableContext[^)]*\)/)
+      if (sigMatch) return sigMatch[1]
+    }
+  }
+  return null
+}
+
+/**
  * Find and extract the body of a named method.
  */
 function findMethodBody(source: string, methodName: string): string | null {
@@ -214,6 +232,7 @@ function extractNodes(
           if (config.nestingType) node.nestingType = config.nestingType
           if (config.completionConfig) node.completionConfig = config.completionConfig
           if (config.stepSemantics) node.stepSemantics = config.stepSemantics
+          if (config.maxConcurrency != null) node.maxConcurrency = config.maxConcurrency
         }
 
         if (info.kind === 'runInChildContext') {
@@ -326,6 +345,7 @@ interface CSharpConfigFlags {
   completionConfig?: string
   stepSemantics?: string
   tenantId?: string
+  maxConcurrency?: number
 }
 
 function extractCSharpConfig(lines: string[], lineIdx: number): CSharpConfigFlags {
@@ -343,6 +363,9 @@ function extractCSharpConfig(lines: string[], lineIdx: number): CSharpConfigFlag
 
   const tenant = searchText.match(/TenantId\s*=\s*"([^"]+)"/)
   if (tenant) flags.tenantId = tenant[1]
+
+  const concurrency = searchText.match(/MaxConcurrency\s*=\s*(\d+)/)
+  if (concurrency) flags.maxConcurrency = Number(concurrency[1])
 
   return flags
 }
@@ -370,10 +393,11 @@ export class CSharpParser implements Parser {
     const fileName = basename(filePath, '.cs')
     const name = options?.name ?? fileName
 
-    // Find the workflow function name from DurableFunction.WrapAsync
-    const workflowName = findWorkflowFunctionName(source)
+    // Find the workflow function name from DurableFunction.WrapAsync or the
+    // [DurableExecution] annotations model.
+    const workflowName = findWorkflowFunctionName(source) ?? findAnnotatedWorkflowFunction(source)
     if (!workflowName) {
-      throw new Error(`No DurableFunction.WrapAsync call found in ${filePath}`)
+      throw new Error(`No DurableFunction.WrapAsync call or [DurableExecution] method found in ${filePath}`)
     }
 
     // Find and extract the workflow function body

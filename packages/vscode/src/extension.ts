@@ -19,14 +19,14 @@ export function activate(context: vscode.ExtensionContext) {
   })
 
   const buildCommand = vscode.commands.registerCommand('durable-viz.build', () => {
-    openBuildPanel(context)
+    openBuildPanel()
   })
 
   context.subscriptions.push(openCommand, buildCommand)
 
   // Auto-refresh on save
   context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument((doc) => {
+    vscode.workspace.onDidSaveTextDocument(() => {
       if (currentPanel && currentFilePath) {
         updatePanel(currentPanel, currentFilePath)
       }
@@ -492,7 +492,7 @@ export function deactivate() {}
 
 let buildPanel: vscode.WebviewPanel | undefined
 
-function openBuildPanel(context: vscode.ExtensionContext) {
+function openBuildPanel() {
   if (buildPanel) {
     buildPanel.reveal(vscode.ViewColumn.Beside)
     return
@@ -524,8 +524,8 @@ function openBuildPanel(context: vscode.ExtensionContext) {
       try {
         const graph = JSON.parse(graphJson)
         const code = generateCode(graph, { language })
-        const ext = language === 'python' ? '.py' : language === 'java' ? '.java' : language === 'csharp' ? '.cs' : '.ts'
-        const lang = language === 'python' ? 'python' : language === 'java' ? 'java' : language === 'csharp' ? 'csharp' : 'typescript'
+        const ext = language === 'python' ? '.py' : language === 'java' ? '.java' : language === 'csharp' ? '.cs' : language === 'rust' ? '.rs' : '.ts'
+        const lang = language === 'python' ? 'python' : language === 'java' ? 'java' : language === 'csharp' ? 'csharp' : language === 'rust' ? 'rust' : 'typescript'
         const doc = await vscode.workspace.openTextDocument({
           content: code,
           language: lang,
@@ -706,20 +706,25 @@ function buildBuildHtml(): string {
         <option value="python">Python</option>
         <option value="java">Java</option>
         <option value="csharp">C# (.NET)</option>
+        <option value="rust">Rust</option>
       </select>
     </div>
     <div class="palette-items">
-      <div class="palette-item step" draggable="true" data-kind="step" data-label="step" data-langs="typescript python java csharp">🟢 Step</div>
-      <div class="palette-item invoke" draggable="true" data-kind="invoke" data-label="invoke" data-langs="typescript python java csharp">🟠 Invoke</div>
-      <div class="palette-item parallel" draggable="true" data-kind="parallel" data-label="parallel" data-langs="typescript python java csharp">🟣 Parallel</div>
-      <div class="palette-item" draggable="true" data-kind="map" data-label="map" data-langs="typescript python java csharp">🟣 Map</div>
-      <div class="palette-item wait" draggable="true" data-kind="wait" data-label="wait" data-langs="typescript python java csharp">🔴 Wait</div>
-      <div class="palette-item wait" draggable="true" data-kind="waitForCallback" data-label="callback" data-langs="typescript python java csharp">🔴 Callback</div>
-      <div class="palette-item wait" draggable="true" data-kind="createCallback" data-label="create-callback" data-langs="typescript python java csharp">🔴 Create Callback</div>
-      <div class="palette-item wait" draggable="true" data-kind="waitForCondition" data-label="poll" data-langs="typescript python java csharp">🔴 Poll</div>
-      <div class="palette-item condition" draggable="true" data-kind="condition" data-label="condition" data-langs="typescript python java csharp">🔵 Condition</div>
-      <div class="palette-item" draggable="true" data-kind="withRetry" data-label="retry" data-langs="typescript python java">🩵 With Retry</div>
-      <div class="palette-item" draggable="true" data-kind="runInChildContext" data-label="child" data-langs="typescript python java csharp">🩵 Child Context</div>
+      <div class="palette-item step" draggable="true" data-kind="step" data-label="step" data-langs="typescript python java csharp rust">🟢 Step</div>
+      <div class="palette-item invoke" draggable="true" data-kind="invoke" data-label="invoke" data-langs="typescript python java csharp rust">🟠 Invoke</div>
+      <div class="palette-item parallel" draggable="true" data-kind="parallel" data-label="parallel" data-langs="typescript python java csharp rust">🟣 Parallel</div>
+      <div class="palette-item" draggable="true" data-kind="map" data-label="map" data-langs="typescript python java csharp rust">🟣 Map</div>
+      <div class="palette-item wait" draggable="true" data-kind="wait" data-label="wait" data-langs="typescript python java csharp rust">🔴 Wait</div>
+      <div class="palette-item wait" draggable="true" data-kind="waitForCallback" data-label="callback" data-langs="typescript python java csharp rust">🔴 Callback</div>
+      <div class="palette-item wait" draggable="true" data-kind="createCallback" data-label="create-callback" data-langs="typescript python java csharp rust">🔴 Create Callback</div>
+      <div class="palette-item wait" draggable="true" data-kind="waitForCondition" data-label="poll" data-langs="typescript python java csharp rust">🔴 Poll</div>
+      <div class="palette-item condition" draggable="true" data-kind="condition" data-label="condition" data-langs="typescript python java csharp rust">🔵 Condition</div>
+      <div class="palette-item" draggable="true" data-kind="withRetry" data-label="retry" data-langs="typescript python java rust">🩵 With Retry</div>
+      <div class="palette-item" draggable="true" data-kind="runInChildContext" data-label="child" data-langs="typescript python java csharp rust">🩵 Child Context</div>
+      <div class="palette-item" draggable="true" data-kind="promiseAll" data-label="join-all" data-langs="typescript rust">🟣 Join All</div>
+      <div class="palette-item" draggable="true" data-kind="promiseAny" data-label="select-ok" data-langs="typescript rust">🟣 Any</div>
+      <div class="palette-item" draggable="true" data-kind="promiseRace" data-label="race" data-langs="typescript rust">🟣 Race</div>
+      <div class="palette-item" draggable="true" data-kind="promiseAllSettled" data-label="all-settled" data-langs="typescript rust">🟣 All Settled</div>
     </div>
     <div class="help">
       Drag primitives onto the canvas.<br>
@@ -828,6 +833,10 @@ function buildBuildHtml(): string {
             'font-size': '11px',
             'text-margin-y': -8,
           }
+        },
+        {
+          selector: 'node[kind="promiseAll"], node[kind="promiseAny"], node[kind="promiseRace"], node[kind="promiseAllSettled"]',
+          style: { 'background-color': '#7b6b9e', 'color': '#e8e3f0', 'shape': 'hexagon' }
         },
         {
           selector: 'node[kind="wait"], node[kind="waitForCallback"], node[kind="createCallback"], node[kind="waitForCondition"]',

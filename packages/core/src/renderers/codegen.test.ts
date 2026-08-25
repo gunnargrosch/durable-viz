@@ -44,6 +44,7 @@ for (const [lang, stepCall, invokeCall, waitCall] of [
   ['python', 'context.step(func=lambda step_ctx: None, name="my-step"', 'context.invoke(function_name="MyFunc", payload={}, name="my-invoke"', 'context.wait(duration=Duration.from_seconds(30), name="my-wait"'],
   ['java', 'ctx.step("my-step", Object.class', 'ctx.invoke("my-invoke", "MyFunc", Object.class', 'ctx.wait("my-wait", Duration.ofSeconds(30))'],
   ['csharp', 'ctx.StepAsync', 'ctx.InvokeAsync<object, object>', 'ctx.WaitAsync'],
+  ['rust', 'ctx.step(|_| async { Ok(()) }).name("my-step")', 'ctx.invoke::<serde_json::Value, _>("MyFunc"', 'ctx.wait(Duration::from_secs(1)).name("my-wait")'],
 ] as const) {
   const langStr = String(lang)
 
@@ -115,6 +116,98 @@ describe('TypeScript: promise combinators', () => {
   it('promiseAllSettled', () => {
     const code = generateCode(makeGraph('test', [makeNode('a', 'promiseAllSettled', 'settled-tasks')]), { language: 'typescript' })
     assertContains(code, "context.promise.allSettled('settled-tasks'")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Rust-specific primitives
+// ---------------------------------------------------------------------------
+
+describe('Rust: combinators and modifiers', () => {
+  it('emits the handler + tokio::main + durable::run entry point', () => {
+    const code = generateCode(makeGraph('test', [makeNode('a', 'step', 'do-work')]), { language: 'rust' })
+    assertContains(code, 'use aws_durable_execution_sdk as durable;')
+    assertContains(code, 'async fn handler(')
+    assertContains(code, '#[tokio::main]')
+    assertContains(code, 'durable::run(handler).await')
+  })
+
+  it('promiseAll maps to try_join_all', () => {
+    const code = generateCode(makeGraph('test', [makeNode('a', 'promiseAll', 'all-tasks')]), { language: 'rust' })
+    assertContains(code, 'ctx.try_join_all([', 'all-tasks')
+  })
+
+  it('promiseAny maps to select_ok', () => {
+    const code = generateCode(makeGraph('test', [makeNode('a', 'promiseAny', 'any-task')]), { language: 'rust' })
+    assertContains(code, 'ctx.select_ok([', 'any-task')
+  })
+
+  it('promiseRace maps to race', () => {
+    const code = generateCode(makeGraph('test', [makeNode('a', 'promiseRace', 'race-task')]), { language: 'rust' })
+    assertContains(code, 'ctx.race([', 'race-task')
+  })
+
+  it('promiseAllSettled maps to join_all', () => {
+    const code = generateCode(makeGraph('test', [makeNode('a', 'promiseAllSettled', 'settled-tasks')]), { language: 'rust' })
+    assertContains(code, 'ctx.join_all([', 'settled-tasks')
+  })
+
+  it('emits Branch::new for parallel branches', () => {
+    const graph = makeGraph('test', [makeNode('a', 'parallel', 'fanout', {
+      branches: [makeBranch('left', [makeNode('b', 'step', 'left')]), makeBranch('right', [makeNode('c', 'step', 'right')])],
+    })])
+    const code = generateCode(graph, { language: 'rust' })
+    assertContains(code, 'Branch::new("left"', 'Branch::new("right"', 'ctx.parallel(vec![')
+  })
+
+  it('emits nesting, completion, and max_concurrency modifiers', () => {
+    const node = makeNode('a', 'parallel', 'fanout', { nestingType: 'FLAT', completionConfig: 'minSuccessful:1', maxConcurrency: 3 })
+    const code = generateCode(makeGraph('test', [node]), { language: 'rust' })
+    assertContains(code, '.nesting(NestingMode::Flat)')
+    assertContains(code, '.completion(CompletionConfig::builder()')
+    assertContains(code, '.max_concurrency(3)')
+  })
+
+  it('emits step semantics and tenant id', () => {
+    const code = generateCode(makeGraph('test', [
+      makeNode('a', 'step', 'idem', { stepSemantics: 'AtMostOncePerRetry' }),
+      makeNode('b', 'invoke', 'ten', { target: 'MyFunc', tenantId: 'tenant-1' }),
+    ]), { language: 'rust' })
+    assertContains(code, '.semantics(durable::StepSemantics::AtMostOncePerRetry)')
+    assertContains(code, '.tenant_id("tenant-1")')
+  })
+
+  it('imports Duration when a wait is present and omits it otherwise', () => {
+    const withWait = generateCode(makeGraph('test', [makeNode('a', 'wait', 'w')]), { language: 'rust' })
+    assertContains(withWait, 'use std::time::Duration;')
+
+    const withoutWait = generateCode(makeGraph('test', [makeNode('a', 'step', 's')]), { language: 'rust' })
+    assertNotContains(withoutWait, 'use std::time::Duration;')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// maxConcurrency emission
+// ---------------------------------------------------------------------------
+
+describe('maxConcurrency in generated code', () => {
+  it('typescript parallel/map', () => {
+    const node = makeNode('a', 'parallel', 'fanout', {
+      maxConcurrency: 5,
+      branches: [makeBranch('left', [makeNode('b', 'step', 'left')])],
+    })
+    const code = generateCode(makeGraph('test', [node]), { language: 'typescript' })
+    assertContains(code, 'maxConcurrency: 5')
+  })
+
+  it('csharp parallel/map', () => {
+    const code = generateCode(makeGraph('test', [makeNode('a', 'parallel', 'fanout', { maxConcurrency: 5 })]), { language: 'csharp' })
+    assertContains(code, 'MaxConcurrency = 5')
+  })
+
+  it('rust parallel/map', () => {
+    const code = generateCode(makeGraph('test', [makeNode('a', 'map', 'm', { maxConcurrency: 5 })]), { language: 'rust' })
+    assertContains(code, '.max_concurrency(5)')
   })
 })
 
@@ -454,7 +547,6 @@ describe('Conditions', () => {
     assertContains(code, 'else')
     assertContains(code, "context.step('else-step'")
     // post-step should be AFTER the if/else, not inside either branch
-    const ifIdx = code.indexOf('if (isValid)')
     const elseIdx = code.indexOf('else')
     const postIdx = code.indexOf("context.step('post-step'")
     assert.ok(postIdx > elseIdx, 'post-step should come after else block')

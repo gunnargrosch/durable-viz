@@ -2,7 +2,6 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { resolve } from 'node:path'
 import { TypeScriptParser } from './typescript.js'
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 
 const parser = new TypeScriptParser()
 const examplesDir = resolve(import.meta.dirname, '../../../..', 'examples')

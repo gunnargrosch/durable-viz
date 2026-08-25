@@ -117,6 +117,28 @@ describe('CSharpParser', () => {
     assert.ok(endEdges.length >= 1)
   })
 
+  it('parses the Lambda Annotations model ([DurableExecution] attribute)', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'DurableExecutionAnnotations.cs'))
+
+    assert.equal(graph.name, 'DurableExecutionAnnotations')
+
+    const kinds = graph.nodes.map((n) => n.kind)
+    assert.ok(kinds.includes('step'))
+    assert.ok(kinds.includes('parallel'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step')
+    assert.ok(step)
+    assert.equal(step.label, 'step-1')
+  })
+
+  it('extracts MaxConcurrency from the annotations model', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'DurableExecutionAnnotations.cs'))
+
+    const parallel = graph.nodes.find((n) => n.kind === 'parallel')
+    assert.ok(parallel)
+    assert.equal(parallel.maxConcurrency, 2)
+  })
+
   it('throws for non-durable files', () => {
     assert.throws(
       () => parser.parseFile(resolve(examplesDir, 'order_processor.py')),
