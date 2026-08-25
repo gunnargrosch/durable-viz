@@ -56,7 +56,13 @@ jobs:
         run: pnpm build
 
       - name: Publish CLI to npm
-        run: npm publish --access public
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "durable-viz@$VERSION" version >/dev/null 2>&1; then
+            echo "durable-viz@$VERSION already published; skipping"
+          else
+            npm publish --access public
+          fi
         working-directory: packages/cli
 
   publish-vscode:
@@ -82,9 +88,9 @@ jobs:
         run: pnpm build
 
       - name: Publish to VS Code Marketplace
-        run: npx @vscode/vsce publish --pat ${{ secrets.VSCE_PAT }} --no-dependencies
+        run: npx @vscode/vsce publish --pat ${{ secrets.VSCE_PAT }} --no-dependencies --skip-duplicate
         working-directory: packages/vscode
 
       - name: Publish to Open VSX Registry
-        run: npx ovsx publish -p ${{ secrets.OVSX_PAT }} --no-dependencies
+        run: npx ovsx publish -p ${{ secrets.OVSX_PAT }} --no-dependencies --skip-duplicate
         working-directory: packages/vscode
