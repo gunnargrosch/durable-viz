@@ -276,6 +276,7 @@ function extractNodes(
           const config = extractJavaConfig(lines, i)
           if (config.nestingType) node.nestingType = config.nestingType
           if (config.completionConfig) node.completionConfig = config.completionConfig
+          if (config.maxConcurrency != null) node.maxConcurrency = config.maxConcurrency
         }
 
         if (info.kind === 'runInChildContext') {
@@ -397,6 +398,7 @@ interface JavaConfigFlags {
   completionConfig?: string
   stepSemantics?: string
   tenantId?: string
+  maxConcurrency?: number
 }
 
 function extractJavaConfig(lines: string[], lineIdx: number): JavaConfigFlags {
@@ -417,6 +419,9 @@ function extractJavaConfig(lines: string[], lineIdx: number): JavaConfigFlags {
 
   const tenant = searchText.match(/\.tenantId\s*\(\s*"([^"]+)"\s*\)/)
   if (tenant) flags.tenantId = tenant[1]
+
+  const concurrency = searchText.match(/\.maxConcurrency\s*\(\s*(\d+)\s*\)/)
+  if (concurrency) flags.maxConcurrency = Number(concurrency[1])
 
   return flags
 }

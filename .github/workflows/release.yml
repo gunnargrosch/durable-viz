@@ -81,6 +81,10 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Publish VS Code extension
+      - name: Publish to VS Code Marketplace
         run: npx @vscode/vsce publish --pat ${{ secrets.VSCE_PAT }} --no-dependencies
+        working-directory: packages/vscode
+
+      - name: Publish to Open VSX Registry
+        run: npx ovsx publish -p ${{ secrets.OVSX_PAT }} --no-dependencies
         working-directory: packages/vscode

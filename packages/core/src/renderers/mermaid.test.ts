@@ -65,7 +65,6 @@ describe('renderMermaid', () => {
 
   it('does not use reserved node IDs', () => {
     const graph = parseFile(resolve(examplesDir, 'order-workflow.ts'))
-    const output = renderMermaid(graph)
 
     const nodeIds = graph.nodes.map((n) => n.id)
     assert.ok(!nodeIds.includes('start'), 'Should not use reserved ID "start"')
@@ -97,5 +96,15 @@ describe('renderMermaid', () => {
     assert.ok(output.includes('flat'), 'Should show FLAT nesting annotation for Java')
     assert.ok(output.includes('tenant tenant-abc-123'), 'Should show tenant ID for Java')
     assert.ok(output.includes('allOf') || output.includes('anyOf'), 'Should include promise combinator')
+  })
+
+  it('includes Rust primitives and max_concurrency annotation', () => {
+    const graph = parseFile(resolve(examplesDir, 'order_workflow.rs'))
+    const output = renderMermaid(graph)
+
+    assert.ok(output.includes('validate-order'), 'Should include the Rust step label')
+    assert.ok(output.includes('prepare-order'), 'Should include the Rust parallel label')
+    assert.ok(output.includes('concurrency 2'), 'Should show max_concurrency annotation')
+    assert.ok(output.includes('manager-approval'), 'Should include the callback label')
   })
 })

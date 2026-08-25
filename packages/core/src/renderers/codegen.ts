@@ -3,9 +3,9 @@
  * Produces boilerplate handler code for TypeScript, Python, and Java.
  */
 
-import type { WorkflowGraph, WorkflowNode, WorkflowBranch } from '../graph.js'
+import type { WorkflowGraph, WorkflowNode } from '../graph.js'
 
-export type CodeGenLanguage = 'typescript' | 'python' | 'java' | 'csharp'
+export type CodeGenLanguage = 'typescript' | 'python' | 'java' | 'csharp' | 'rust'
 
 export interface CodeGenOptions {
   language: CodeGenLanguage
@@ -36,13 +36,6 @@ function varName(label: string, used: Set<string>): string {
 // ---------------------------------------------------------------------------
 
 const IDENT = '  '
-
-/** Determine if a node connects directly to End via its edges (no further nodes). */
-function isLastBeforeEnd(nodeId: string, graph: WorkflowGraph): boolean {
-  return graph.edges.some(
-    (e) => e.from === nodeId && graph.nodes.find((n) => n.id === e.to)?.kind === 'end'
-  )
-}
 
 /** Wrap a block of code in an if/else structure when condition is present. */
 interface ConditionRegion {
@@ -169,9 +162,11 @@ function genTypeScriptNode(
       if (!node.branches?.length) {
         return `${pad}const ${vname} = await context.parallel('${node.label}', []);`
       }
-      let opts = ''
-      if (node.nestingType === 'FLAT') opts += ', { nesting: NestingType.FLAT }'
-      else if (node.completionConfig) opts += `, { completionConfig: CompletionConfig.${node.completionConfig.replace(/\s+/g, '')} }`
+      const configParts: string[] = []
+      if (node.nestingType === 'FLAT') configParts.push('nesting: NestingType.FLAT')
+      if (node.completionConfig) configParts.push(`completionConfig: CompletionConfig.${node.completionConfig.replace(/\s+/g, '')}`)
+      if (node.maxConcurrency != null) configParts.push(`maxConcurrency: ${node.maxConcurrency}`)
+      const opts = configParts.length ? `, { ${configParts.join(', ')} }` : ''
 
       const branches = node.branches.map((b) => {
         const bLabel = b.nodes.map((bn) => bn.label).join(', ')
@@ -185,11 +180,13 @@ function genTypeScriptNode(
       if (!node.branches?.length) {
         return `${pad}const ${vname} = await context.map('${node.label}', []);`
       }
-      let opts = ''
-      if (node.nestingType === 'FLAT') opts += ', { nesting: NestingType.FLAT }'
+      const configParts: string[] = []
+      if (node.nestingType === 'FLAT') configParts.push('nesting: NestingType.FLAT')
+      if (node.maxConcurrency != null) configParts.push(`maxConcurrency: ${node.maxConcurrency}`)
+      const opts = configParts.length ? `, { ${configParts.join(', ')} }` : ''
 
       const branchNames = node.branches.map((b) => `'${b.name}'`).join(', ')
-      const branchTodos = node.branches.map((b, idx) => {
+      const branchTodos = node.branches.map((b) => {
         const bLabel = (b.nodes[0]?.label) || b.name
         return `${pad}${IDENT}// TODO: process ${bLabel}`
       }).join('\n')
@@ -254,7 +251,6 @@ export function generateTypeScript(graph: WorkflowGraph): string {
   lines.push(`export const handler = withDurableExecution(async (event, context) => {`)
 
   const workflowNodes = graph.nodes.filter((n) => n.kind !== 'start' && n.kind !== 'end')
-  const conditionNodeIds = new Set(Array.from(conditionRegions.keys()))
   let i = 0
 
   function emitCondition(node: WorkflowNode, indent: number) {
@@ -339,7 +335,6 @@ export function generateTypeScript(graph: WorkflowGraph): string {
 export function generatePython(graph: WorkflowGraph): string {
   const conditionRegions = findConditionRegions(graph)
   const generatedIds = new Set<string>()
-  const usedNames = new Set<string>()
   const lines: string[] = []
 
   const needsWait = graph.nodes.some((n) => n.kind === 'wait')
@@ -393,7 +388,7 @@ export function generatePython(graph: WorkflowGraph): string {
       if (tn.kind === 'condition') {
         emitCondition(tn, indent + 1)
       } else {
-        lines.push(genPythonNode(tn, indent + 1, generatedIds, usedNames))
+        lines.push(genPythonNode(tn, indent + 1, generatedIds))
       }
     }
 
@@ -404,7 +399,7 @@ export function generatePython(graph: WorkflowGraph): string {
         if (en.kind === 'condition') {
           emitCondition(en, indent + 1)
         } else {
-          lines.push(genPythonNode(en, indent + 1, generatedIds, usedNames))
+          lines.push(genPythonNode(en, indent + 1, generatedIds))
         }
       }
     }
@@ -426,7 +421,7 @@ export function generatePython(graph: WorkflowGraph): string {
     }
 
     if (!generatedIds.has(node.id)) {
-      const code = genPythonNode(node, 1, generatedIds, usedNames)
+      const code = genPythonNode(node, 1, generatedIds)
       if (code) lines.push(code)
       lines.push('')
     }
@@ -442,11 +437,9 @@ export function generatePython(graph: WorkflowGraph): string {
 function genPythonNode(
   node: WorkflowNode,
   indent: number,
-  generatedIds: Set<string>,
-  usedNames: Set<string>
+  generatedIds: Set<string>
 ): string {
   const pad = IDENT.repeat(indent)
-  const vname = varName(node.label, usedNames)
   generatedIds.add(node.id)
 
   switch (node.kind) {
@@ -740,18 +733,199 @@ function genCSharpNode(
       return `${pad}var ${vname} = await ctx.CreateCallbackAsync<object>(\n${pad}${IDENT}name: "${node.label}");`
     case 'waitForCondition':
       return `${pad}var ${vname} = await ctx.WaitForConditionAsync<object>(\n${pad}${IDENT}check: async (state, ctx, _) => {\n${pad}${IDENT}${IDENT}// TODO: poll and update state\n${pad}${IDENT}${IDENT}await Task.CompletedTask;\n${pad}${IDENT}${IDENT}return state;\n${pad}${IDENT}},\n${pad}${IDENT}config: new WaitForConditionConfig<object>\n${pad}${IDENT}{\n${pad}${IDENT}${IDENT}InitialState = new { },\n${pad}${IDENT}${IDENT}WaitStrategy = WaitStrategy.Fixed<object>(\n${pad}${IDENT}${IDENT}${IDENT}delay: TimeSpan.FromSeconds(5),\n${pad}${IDENT}${IDENT}${IDENT}maxAttempts: 10,\n${pad}${IDENT}${IDENT}${IDENT}isDone: s => false)\n${pad}${IDENT}},\n${pad}${IDENT}name: "${node.label}");`
-    case 'parallel':
+    case 'parallel': {
+      const config = node.maxConcurrency != null
+        ? `,\n${pad}${IDENT}config: new ParallelConfig { MaxConcurrency = ${node.maxConcurrency} })`
+        : ')'
       if (!node.branches?.length) {
-        return `${pad}var ${vname} = await ctx.ParallelAsync<object>(\n${pad}${IDENT}Array.Empty<Func<IDurableContext, CancellationToken, Task<object>>>(),\n${pad}${IDENT}name: "${node.label}");`
+        return `${pad}var ${vname} = await ctx.ParallelAsync<object>(\n${pad}${IDENT}Array.Empty<Func<IDurableContext, CancellationToken, Task<object>>>(),\n${pad}${IDENT}name: "${node.label}"${config};`
       }
-      return `${pad}var ${vname} = await ctx.ParallelAsync(\n${pad}${IDENT}new[]\n${pad}${IDENT}{\n${node.branches.map((b) => `${pad}${IDENT}${IDENT}new DurableBranch<object>("${b.name}", async (_, _) => {\n${pad}${IDENT}${IDENT}${IDENT}// TODO: implement ${b.name}\n${pad}${IDENT}${IDENT}${IDENT}await Task.CompletedTask;\n${pad}${IDENT}${IDENT}${IDENT}return null;\n${pad}${IDENT}${IDENT}})`).join(',\n')}\n${pad}${IDENT}},\n${pad}${IDENT}name: "${node.label}");`
-    case 'map':
-      return `${pad}var ${vname} = await ctx.MapAsync<object, object>(\n${pad}${IDENT}Array.Empty<object>(),\n${pad}${IDENT}async (childCtx, item, idx, items, _) => {\n${pad}${IDENT}${IDENT}// TODO: process item\n${pad}${IDENT}${IDENT}await Task.CompletedTask;\n${pad}${IDENT}${IDENT}return null;\n${pad}${IDENT}},\n${pad}${IDENT}name: "${node.label}");`
+      return `${pad}var ${vname} = await ctx.ParallelAsync(\n${pad}${IDENT}new[]\n${pad}${IDENT}{\n${node.branches.map((b) => `${pad}${IDENT}${IDENT}new DurableBranch<object>("${b.name}", async (_, _) => {\n${pad}${IDENT}${IDENT}${IDENT}// TODO: implement ${b.name}\n${pad}${IDENT}${IDENT}${IDENT}await Task.CompletedTask;\n${pad}${IDENT}${IDENT}${IDENT}return null;\n${pad}${IDENT}${IDENT}})`).join(',\n')}\n${pad}${IDENT}},\n${pad}${IDENT}name: "${node.label}"${config};`
+    }
+    case 'map': {
+      const config = node.maxConcurrency != null
+        ? `,\n${pad}${IDENT}config: new MapConfig<object> { MaxConcurrency = ${node.maxConcurrency} })`
+        : ')'
+      return `${pad}var ${vname} = await ctx.MapAsync<object, object>(\n${pad}${IDENT}Array.Empty<object>(),\n${pad}${IDENT}async (childCtx, item, idx, items, _) => {\n${pad}${IDENT}${IDENT}// TODO: process item\n${pad}${IDENT}${IDENT}await Task.CompletedTask;\n${pad}${IDENT}${IDENT}return null;\n${pad}${IDENT}},\n${pad}${IDENT}name: "${node.label}"${config};`
+    }
     case 'runInChildContext':
       return `${pad}var ${vname} = await ctx.RunInChildContextAsync<object>(\n${pad}${IDENT}async (childCtx, _) => {\n${pad}${IDENT}${IDENT}// TODO: implement ${node.label} in child context\n${pad}${IDENT}${IDENT}await Task.CompletedTask;\n${pad}${IDENT}${IDENT}return null;\n${pad}${IDENT}},\n${pad}${IDENT}name: "${node.label}");`
     case 'withRetry':
       return `${pad}// withRetry: wrap in a StepAsync with StepConfig.RetryStrategy (no standalone WithRetryAsync in .NET SDK)\n${pad}var ${vname} = await ctx.StepAsync(\n${pad}${IDENT}async (_, _) => {\n${pad}${IDENT}${IDENT}// TODO: implement ${node.label}\n${pad}${IDENT}${IDENT}await Task.CompletedTask;\n${pad}${IDENT}${IDENT}return null;\n${pad}${IDENT}},\n${pad}${IDENT}name: "${node.label}",\n${pad}${IDENT}config: new StepConfig { RetryStrategy = RetryStrategy.ExponentialBackoff(maxAttempts: 3) });`
     default:
+      return ''
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rust code generation
+// ---------------------------------------------------------------------------
+
+export function generateRust(graph: WorkflowGraph): string {
+  const conditionRegions = findConditionRegions(graph)
+  const generatedIds = new Set<string>()
+  const usedNames = new Set<string>()
+  const lines: string[] = []
+
+  const needsDuration = graph.nodes.some((n) => n.kind === 'wait' || n.kind === 'waitForCondition')
+  const needsBranch = graph.nodes.some((n) => n.kind === 'parallel' && n.branches?.length)
+  const needsNesting = graph.nodes.some((n) => n.nestingType === 'FLAT')
+  const needsCompletion = graph.nodes.some((n) => n.completionConfig)
+  const needsSemantics = graph.nodes.some((n) => n.stepSemantics === 'AtMostOncePerRetry')
+
+  lines.push('use aws_durable_execution_sdk as durable;')
+  if (needsDuration) lines.push('use std::time::Duration;')
+  if (needsBranch) lines.push('use durable::Branch;')
+  if (needsNesting) lines.push('use durable::builders::map_parallel::NestingMode;')
+  if (needsCompletion) lines.push('use durable::builders::map_parallel::CompletionConfig;')
+  if (needsSemantics) lines.push('use durable::StepSemantics;')
+  lines.push('')
+  lines.push('async fn handler(')
+  lines.push(`${IDENT}_event: serde_json::Value,`)
+  lines.push(`${IDENT}ctx: durable::DurableContext,`)
+  lines.push(') -> Result<serde_json::Value, durable::BoxError> {')
+
+  const workflowNodes = graph.nodes.filter((n) => n.kind !== 'start' && n.kind !== 'end')
+  let i = 0
+
+  function emitCondition(node: WorkflowNode, indent: number) {
+    const region = conditionRegions.get(node.id)
+    if (!region) return
+    generatedIds.add(node.id)
+    const pad = IDENT.repeat(indent)
+
+    lines.push(`${pad}if ${node.condition ?? node.label} {`)
+
+    for (const tn of region.thenNodes) {
+      if (tn.kind === 'start' || tn.kind === 'end') continue
+      if (tn.kind === 'condition') {
+        emitCondition(tn, indent + 1)
+      } else {
+        lines.push(genRustNode(tn, indent + 1, generatedIds, usedNames))
+      }
+    }
+
+    lines.push(`${pad}}`)
+
+    if (region.elseNodes && region.elseNodes.length > 0) {
+      lines.push(`${pad}else {`)
+      for (const en of region.elseNodes) {
+        if (en.kind === 'start' || en.kind === 'end') continue
+        if (en.kind === 'condition') {
+          emitCondition(en, indent + 1)
+        } else {
+          lines.push(genRustNode(en, indent + 1, generatedIds, usedNames))
+        }
+      }
+      lines.push(`${pad}}`)
+    }
+  }
+
+  while (i < workflowNodes.length) {
+    const node = workflowNodes[i]
+
+    if (generatedIds.has(node.id)) {
+      i++
+      continue
+    }
+
+    if (node.kind === 'condition') {
+      emitCondition(node, 1)
+      lines.push('')
+      i += (node.thenCount ?? 1) + 1
+      continue
+    }
+
+    if (!generatedIds.has(node.id)) {
+      const code = genRustNode(node, 1, generatedIds, usedNames)
+      if (code) lines.push(code)
+      lines.push('')
+    }
+    i++
+  }
+
+  lines.push(`${IDENT}Ok(serde_json::json!({ "status": "completed" }))`)
+  lines.push('}')
+  lines.push('')
+  lines.push('#[tokio::main]')
+  lines.push('async fn main() -> Result<(), lambda_runtime::Error> {')
+  lines.push(`${IDENT}lambda_runtime::tracing::init_default_subscriber();`)
+  lines.push(`${IDENT}durable::run(handler).await`)
+  lines.push('}')
+  lines.push('')
+
+  return lines.join('\n')
+}
+
+function genRustNode(
+  node: WorkflowNode,
+  indent: number,
+  generatedIds: Set<string>,
+  usedNames: Set<string>
+): string {
+  const pad = IDENT.repeat(indent)
+  const vname = varName(node.label, usedNames)
+  generatedIds.add(node.id)
+
+  const chain = (parts: string[]): string => parts.filter(Boolean).join('')
+
+  switch (node.kind) {
+    case 'step': {
+      const sem = node.stepSemantics === 'AtMostOncePerRetry'
+        ? '.semantics(durable::StepSemantics::AtMostOncePerRetry)'
+        : ''
+      return `${pad}let ${vname} = ctx.step(|_| async { Ok(()) })${sem}.name("${node.label}").await?;`
+    }
+    case 'invoke': {
+      const funcRef = node.target ?? 'MyFunction'
+      const tenant = node.tenantId ? `.tenant_id("${node.tenantId}")` : ''
+      return `${pad}let ${vname} = ctx.invoke::<serde_json::Value, _>("${funcRef}", serde_json::json!({}))${tenant}.name("${node.label}").await?;`
+    }
+    case 'wait':
+      return `${pad}ctx.wait(Duration::from_secs(1)).name("${node.label}").await?;`
+    case 'waitForCallback':
+      return `${pad}let ${vname} = ctx.wait_for_callback::<serde_json::Value, _, _>(|_, _| async {\n${pad}${IDENT}// TODO: notify external system with callback id\n${pad}${IDENT}Ok(())\n${pad}}).name("${node.label}").await?;`
+    case 'createCallback':
+      return `${pad}let ${vname} = ctx.create_callback::<serde_json::Value>().name("${node.label}").await?.result().await?;`
+    case 'waitForCondition':
+      return `${pad}let ${vname} = ctx.wait_for_condition(|_ctx, state: i32| async move { Ok(state + 1) }, 0)\n${pad}${IDENT}.wait_strategy_fn(|state, _attempt| {\n${pad}${IDENT}${IDENT}if state >= 1 { durable::builders::wait_for_condition::WaitDecision::complete() } else { durable::builders::wait_for_condition::WaitDecision::continue_with(Duration::from_secs(1)) }\n${pad}${IDENT}})\n${pad}${IDENT}.name("${node.label}").await?;`
+    case 'parallel': {
+      const modifiers = chain([
+        node.nestingType === 'FLAT' ? '.nesting(NestingMode::Flat)' : '',
+        node.completionConfig ? '.completion(CompletionConfig::builder().build()?)' : '',
+        node.maxConcurrency != null ? `.max_concurrency(${node.maxConcurrency})` : '',
+      ])
+      if (!node.branches?.length) {
+        return `${pad}let ${vname} = ctx.parallel(Vec::<durable::Branch<serde_json::Value>>::new())${modifiers}.name("${node.label}").await?;`
+      }
+      const branchCode = node.branches.map((b) =>
+        `${pad}${IDENT}Branch::new("${b.name}", |_child| async move { Ok(()) })`
+      ).join(',\n')
+      return `${pad}let ${vname} = ctx.parallel(vec![\n${branchCode}\n${pad}])${modifiers}.name("${node.label}").await?;`
+    }
+    case 'map': {
+      const modifiers = chain([
+        node.nestingType === 'FLAT' ? '.nesting(NestingMode::Flat)' : '',
+        node.completionConfig ? '.completion(CompletionConfig::builder().build()?)' : '',
+        node.maxConcurrency != null ? `.max_concurrency(${node.maxConcurrency})` : '',
+      ])
+      return `${pad}let ${vname} = ctx.map(vec![], |_child, _item, _idx| async move { Ok(()) })${modifiers}.name("${node.label}").await?;`
+    }
+    case 'withRetry':
+      return `${pad}let ${vname} = ctx.with_retry(|_ctx| async move { Ok(()) }).name("${node.label}").await?;`
+    case 'runInChildContext':
+      return `${pad}let ${vname} = ctx.run_in_child_context(|_child| async move { Ok(()) }).name("${node.label}").await?;`
+    case 'promiseAll':
+      return `${pad}let ${vname} = ctx.try_join_all([\n${pad}${IDENT}// TODO: add operation futures (e.g. ctx.step(...).name("x").future())\n${pad}]).name("${node.label}").await?;`
+    case 'promiseAny':
+      return `${pad}let ${vname} = ctx.select_ok([\n${pad}${IDENT}// TODO: add operation futures (e.g. ctx.step(...).name("x").future())\n${pad}]).name("${node.label}").await?;`
+    case 'promiseRace':
+      return `${pad}let ${vname} = ctx.race([\n${pad}${IDENT}// TODO: add operation futures (e.g. ctx.step(...).name("x").future())\n${pad}]).name("${node.label}").await?;`
+    case 'promiseAllSettled':
+      return `${pad}let ${vname} = ctx.join_all([\n${pad}${IDENT}// TODO: add operation futures (e.g. ctx.step(...).name("x").future())\n${pad}]).name("${node.label}").await?;`
+    case 'condition':
+    case 'start':
+    case 'end':
       return ''
   }
 }
@@ -770,6 +944,8 @@ export function generateCode(graph: WorkflowGraph, options: CodeGenOptions): str
       return generateJava(graph)
     case 'csharp':
       return generateCSharp(graph)
+    case 'rust':
+      return generateRust(graph)
   }
 }
 

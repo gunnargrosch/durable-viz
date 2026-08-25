@@ -249,6 +249,7 @@ function extractNodes(
           const config = extractPythonConfig(lines, i)
           if (config.nestingType) node.nestingType = config.nestingType
           if (config.completionConfig) node.completionConfig = config.completionConfig
+          if (config.maxConcurrency != null) node.maxConcurrency = config.maxConcurrency
         }
 
         if (info.kind === 'runInChildContext') {
@@ -347,6 +348,7 @@ interface PythonConfigFlags {
   completionConfig?: string
   stepSemantics?: string
   tenantId?: string
+  maxConcurrency?: number
 }
 
 function extractPythonConfig(lines: string[], lineIdx: number): PythonConfigFlags {
@@ -364,6 +366,9 @@ function extractPythonConfig(lines: string[], lineIdx: number): PythonConfigFlag
 
   const tenant = searchText.match(/["']?\s*tenant_id\s*["']?\s*[=:]\s*["']([^"']+)["']/)
   if (tenant) flags.tenantId = tenant[1]
+
+  const concurrency = searchText.match(/["']?\s*max_concurrency\s*["']?\s*[=:]\s*(\d+)/)
+  if (concurrency) flags.maxConcurrency = Number(concurrency[1])
 
   return flags
 }

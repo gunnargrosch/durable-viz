@@ -25,12 +25,14 @@ import { TypeScriptParser } from './parsers/typescript.js'
 import { PythonParser } from './parsers/python.js'
 import { JavaParser } from './parsers/java.js'
 import { CSharpParser } from './parsers/csharp.js'
+import { RustParser } from './parsers/rust.js'
 
 const parsers: Parser[] = [
   new TypeScriptParser(),
   new PythonParser(),
   new JavaParser(),
   new CSharpParser(),
+  new RustParser(),
 ]
 
 function getParser(filePath: string): Parser {

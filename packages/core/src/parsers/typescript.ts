@@ -159,6 +159,14 @@ function getCompletionConfig(call: CallExpression): string | undefined {
   return undefined
 }
 
+/** Extract maxConcurrency from a config object. */
+function getMaxConcurrency(call: CallExpression): number | undefined {
+  const lastArg = call.getArguments()[call.getArguments().length - 1]
+  if (!lastArg) return undefined
+  const match = lastArg.getText().match(/maxConcurrency\s*:\s*(\d+)/)
+  return match ? Number(match[1]) : undefined
+}
+
 /** Get 1-based source line number for an AST node. */
 function lineOf(node: Node): number {
   return node.getStartLineNumber()
@@ -509,6 +517,7 @@ function extractFromBlock(
           branches,
           nestingType: getNestingType(call),
           completionConfig: getCompletionConfig(call),
+          maxConcurrency: getMaxConcurrency(call),
           sourceLine: lineOf(call),
         })
       } else if (isDurableCall(call, 'waitForCallback', contextNames)) {
@@ -574,6 +583,7 @@ function extractFromBlock(
           branches,
           nestingType: getNestingType(call),
           completionConfig: getCompletionConfig(call),
+          maxConcurrency: getMaxConcurrency(call),
           sourceLine: lineOf(call),
         })
       } else if (isDurableCall(call, 'invoke', contextNames)) {

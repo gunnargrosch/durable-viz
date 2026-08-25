@@ -2,7 +2,7 @@
   "name": "durable-viz",
   "displayName": "Durable Viz",
   "description": "Visualize AWS Lambda Durable Functions workflows. See your step, parallel, invoke, and callback primitives as an interactive flowchart.",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "publisher": "gunnargrosch",
   "license": "MIT",
   "repository": {
@@ -47,7 +47,7 @@
       "editor/title": [
         {
           "command": "durable-viz.open",
-          "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python || resourceLangId == java || resourceLangId == csharp",
+          "when": "resourceLangId == typescript || resourceLangId == javascript || resourceLangId == python || resourceLangId == java || resourceLangId == csharp || resourceLangId == rust",
           "group": "navigation"
         }
       ]
@@ -56,6 +56,7 @@
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
     "watch": "pnpm build --watch",
+    "lint": "eslint src",
     "package": "vsce package --no-dependencies"
   },
   "dependencies": {

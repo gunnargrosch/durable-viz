@@ -50,6 +50,8 @@ export interface WorkflowNode {
   stepSemantics?: string
   /** Tenant ID for multi-tenant invoke operations. */
   tenantId?: string
+  /** Concurrency limit for parallel/map nodes (e.g. maxConcurrency, max_concurrency). */
+  maxConcurrency?: number
   /** Source line number (1-based) where this primitive appears. */
   sourceLine?: number
 }

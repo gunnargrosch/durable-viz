@@ -5,7 +5,7 @@ Visualize and build [AWS Lambda Durable Functions](https://docs.aws.amazon.com/l
 - **View mode:** Parse handler code and render an interactive flowchart.
 - **Build mode:** Design workflows from scratch and generate handler boilerplate.
 
-Supports **TypeScript/JavaScript**, **Python**, **Java**, and **C# (.NET)** runtimes.
+Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, and **Rust** runtimes.
 
 ## Features
 
@@ -19,10 +19,10 @@ Supports **TypeScript/JavaScript**, **Python**, **Java**, and **C# (.NET)** runt
 
 ### Build Mode
 
-- **Drag-and-drop palette** with 11 primitives filtered by language.
+- **Drag-and-drop palette** with 15 primitives filtered by language.
 - **Click-to-connect edges.** Conditions auto-label `if`/`else` branches.
 - **Compound nodes** for Parallel/Map with drag-to-nest.
-- **Code generation** in TypeScript, Python, Java, and C#.
+- **Code generation** in TypeScript, Python, Java, C#, and Rust.
 - **Mermaid preview**, **save/load JSON**, **undo/redo**.
 
 ## Usage
@@ -32,7 +32,7 @@ Supports **TypeScript/JavaScript**, **Python**, **Java**, and **C# (.NET)** runt
 | **View** | `Durable Viz: Open Lambda Durable Function Workflow` |
 | **Build** | `Durable Viz: Build Workflow Diagram` |
 
-A toolbar button also appears in the editor title bar for `.ts`, `.js`, `.py`, `.java`, and `.cs` files.
+A toolbar button also appears in the editor title bar for `.ts`, `.js`, `.py`, `.java`, `.cs`, and `.rs` files.
 
 ## Supported Languages
 
@@ -41,7 +41,8 @@ A toolbar button also appears in the editor title bar for `.ts`, `.js`, `.py`, `
 | TypeScript / JavaScript | `withDurableExecution()` | `@aws/durable-execution-sdk-js` |
 | Python | `@durable_execution` decorator | `aws-durable-execution-sdk-python` |
 | Java | `extends DurableHandler` | `aws-durable-execution-sdk-java` |
-| C# (.NET) | `DurableFunction.WrapAsync` | `Amazon.Lambda.DurableExecution` |
+| C# (.NET) | `DurableFunction.WrapAsync` or `[DurableExecution]` | `Amazon.Lambda.DurableExecution` |
+| Rust | `durable::run(handler)` | `aws-durable-execution-sdk` |
 
 ## Links
 

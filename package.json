@@ -10,6 +10,12 @@
     "node": ">=20"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "eslint": "^10.9.1",
+    "typescript-eslint": "^8.68.0"
   }
 }
