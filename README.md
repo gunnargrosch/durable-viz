@@ -2,6 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/durable-viz)](https://www.npmjs.com/package/durable-viz)
 [![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/gunnargrosch.durable-viz)](https://marketplace.visualstudio.com/items?itemName=gunnargrosch.durable-viz)
+[![Open VSX](https://img.shields.io/open-vsx/v/gunnargrosch/durable-viz)](https://open-vsx.org/extension/gunnargrosch/durable-viz)
 [![CI](https://github.com/gunnargrosch/durable-viz/actions/workflows/ci.yml/badge.svg)](https://github.com/gunnargrosch/durable-viz/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A520-green)](https://nodejs.org/)
@@ -104,9 +105,11 @@ npx durable-viz examples/order_workflow_config.go --open
 
 The extension has two modes: **View** (parse handler code and render a diagram) and **Build** (design a workflow from scratch and generate boilerplate).
 
-### Install from Marketplace
+### Install from a Marketplace
 
 [Install from VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=gunnargrosch.durable-viz) or [open directly in VS Code](vscode:extension/gunnargrosch.durable-viz).
+
+For Kiro, Cursor, VSCodium, Gitpod, Theia, and other Open VSX consumers, [install from the Open VSX Registry](https://open-vsx.org/extension/gunnargrosch.durable-viz).
 
 You can also search **"Durable Viz"** in the Extensions panel, or run:
 

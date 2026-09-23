@@ -89,7 +89,7 @@ Go also supports `durable.All()`, `durable.AllSettled()`, `durable.Any()`, `dura
 
 ## Build Mode
 
-For visual workflow design with code generation, use the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=gunnargrosch.durable-viz) and run **Durable Viz: Build Workflow Diagram**.
+For visual workflow design with code generation, use the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=gunnargrosch.durable-viz) (also on [Open VSX](https://open-vsx.org/extension/gunnargrosch/durable-viz)) and run **Durable Viz: Build Workflow Diagram**.
 
 ## Links
 

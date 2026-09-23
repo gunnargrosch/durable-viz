@@ -1,11 +1,20 @@
 # Durable Viz
 
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/gunnargrosch.durable-viz)](https://marketplace.visualstudio.com/items?itemName=gunnargrosch.durable-viz)
+[![Open VSX](https://img.shields.io/open-vsx/v/gunnargrosch/durable-viz)](https://open-vsx.org/extension/gunnargrosch/durable-viz)
+
 Visualize and build [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows in VS Code.
 
 - **View mode:** Parse handler code and render an interactive flowchart.
 - **Build mode:** Design workflows from scratch and generate handler boilerplate.
 
 Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes.
+
+## Install
+
+- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=gunnargrosch.durable-viz)
+- [Open VSX Registry](https://open-vsx.org/extension/gunnargrosch/durable-viz) — for Kiro, Cursor, VSCodium, Gitpod, Theia, and other Open VSX consumers
+- Or run `ext install gunnargrosch.durable-viz`
 
 ## Features
 
