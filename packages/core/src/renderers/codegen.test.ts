@@ -946,3 +946,120 @@ describe('generateCode (from examples)', () => {
     assertContains(cs, 'DurableFunction.WrapAsync', 'IDurableContext')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Go
+// ---------------------------------------------------------------------------
+
+describe('Go code generation', () => {
+  it('emits a package, durable import, handler, and Start entry point', () => {
+    const code = generateCode(makeGraph('test', [makeNode('a', 'step', 'do-work')]), { language: 'go' })
+    assertContains(
+      code,
+      'package main',
+      '"github.com/aws/aws-durable-execution-sdk-go/durable"',
+      'func handler(ctx durable.Context, event any) (any, error) {',
+      'durable.Start(handler)',
+    )
+  })
+
+  it('generates basic primitives', () => {
+    const code = generateCode(makeGraph('test', [
+      makeNode('a', 'step', 'my-step'),
+      makeNode('b', 'invoke', 'my-invoke', { target: 'MyFunc' }),
+      makeNode('c', 'wait', 'my-wait'),
+    ]), { language: 'go' })
+    assertContains(
+      code,
+      'durable.Step(ctx, "my-step"',
+      'durable.Invoke[any, any](ctx, "my-invoke", "MyFunc"',
+      'durable.Wait(ctx, "my-wait", 30*time.Second)',
+      '"time"',
+    )
+  })
+
+  it('generates callback and condition primitives', () => {
+    const code = generateCode(makeGraph('test', [
+      makeNode('a', 'waitForCallback', 'my-callback'),
+      makeNode('b', 'createCallback', 'create-cb'),
+      makeNode('c', 'waitForCondition', 'poll-status'),
+    ]), { language: 'go' })
+    assertContains(
+      code,
+      'durable.WaitForCallback[any](ctx, "my-callback"',
+      'durable.CreateCallback[any](ctx, "create-cb"',
+      'durable.WaitForCondition[any](ctx, "poll-status"',
+      'durable.ConditionConfig[any]{}',
+    )
+  })
+
+  it('generates child context, retry, and tenant config', () => {
+    const code = generateCode(makeGraph('test', [
+      makeNode('a', 'runInChildContext', 'child-work', { nestingType: 'FLAT' }),
+      makeNode('b', 'withRetry', 'retry-op'),
+      makeNode('c', 'invoke', 'tenant-invoke', { target: 'Fn', tenantId: 'tenant-9' }),
+    ]), { language: 'go' })
+    assertContains(
+      code,
+      'durable.RunInChildContext[any](ctx, "child-work"',
+      'durable.WithChildVirtual()',
+      'durable.Retry[any](ctx, "retry-op"',
+      'durable.ExponentialBackoff()',
+      'durable.WithTenantID("tenant-9")',
+    )
+  })
+
+  it('emits step semantics', () => {
+    const code = generateCode(makeGraph('test', [makeNode('a', 'step', 's', { stepSemantics: 'AtMostOncePerRetry' })]), { language: 'go' })
+    assertContains(code, 'durable.WithSemantics(durable.AtMostOncePerRetry)')
+  })
+
+  it('emits parallel branches with Name/Func', () => {
+    const node = makeNode('a', 'parallel', 'fanout', {
+      branches: [makeBranch('left', [makeNode('b', 'step', 'left')]), makeBranch('right', [makeNode('c', 'step', 'right')])],
+    })
+    const code = generateCode(makeGraph('test', [node]), { language: 'go' })
+    assertContains(code, 'durable.Parallel[any](ctx, "fanout", []durable.Branch[any]{', 'Name: "left"', 'Name: "right"')
+  })
+
+  it('emits map concurrency and completion config with the aws import', () => {
+    const node = makeNode('a', 'map', 'm', { maxConcurrency: 5, completionConfig: 'toleratedFailures:2' })
+    const code = generateCode(makeGraph('test', [node]), { language: 'go' })
+    assertContains(code, 'durable.Map[any, any](ctx, "m"', 'durable.WithMaxConcurrency(5)', 'durable.WithCompletion(durable.CompletionConfig{ToleratedFailureCount: aws.Int(2)})', '"github.com/aws/aws-sdk-go-v2/aws"')
+  })
+
+  it('omits the aws import when no completion config needs it', () => {
+    const code = generateCode(makeGraph('test', [makeNode('a', 'map', 'm', { maxConcurrency: 5 })]), { language: 'go' })
+    assertNotContains(code, 'aws-sdk-go-v2/aws')
+  })
+
+  it('generates promise combinators', () => {
+    const code = generateCode(makeGraph('test', [
+      makeNode('a', 'promiseAll', 'all-ops'),
+      makeNode('b', 'promiseAny', 'any-ops'),
+      makeNode('c', 'promiseRace', 'race-ops'),
+      makeNode('d', 'promiseAllSettled', 'settled-ops'),
+    ]), { language: 'go' })
+    assertContains(
+      code,
+      'durable.All[any](ctx, "all-ops"',
+      'durable.Any[any](ctx, "any-ops"',
+      'durable.Race[any](ctx, "race-ops"',
+      'durable.AllSettled[any](ctx, "settled-ops"',
+    )
+  })
+
+  it('generates Go from the order_workflow example', () => {
+    const graph = parseFile(resolve(examplesDir, 'order_workflow.go'))
+    const code = generateCode(graph, { language: 'go' })
+
+    assertContains(code, 'package main', 'durable.Start(handler)', 'durable.Step(ctx, "validate-order"', 'durable.Parallel[any](ctx, "prepare-shipment"', 'Name: "generate-label"')
+  })
+
+  it('generates Go from the order_workflow_config example', () => {
+    const graph = parseFile(resolve(examplesDir, 'order_workflow_config.go'))
+    const code = generateCode(graph, { language: 'go' })
+
+    assertContains(code, 'durable.WithSemantics(durable.AtMostOncePerRetry)', 'durable.WithTenantID("tenant-001")', 'durable.WaitForCondition[any]')
+  })
+})
