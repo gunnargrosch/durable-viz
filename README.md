@@ -109,7 +109,7 @@ The extension has two modes: **View** (parse handler code and render a diagram) 
 
 [Install from VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=gunnargrosch.durable-viz) or [open directly in VS Code](vscode:extension/gunnargrosch.durable-viz).
 
-For Kiro, Cursor, VSCodium, Gitpod, Theia, and other Open VSX consumers, [install from the Open VSX Registry](https://open-vsx.org/extension/gunnargrosch.durable-viz).
+For Kiro, Cursor, VSCodium, Gitpod, Theia, and other Open VSX consumers, [install from the Open VSX Registry](https://open-vsx.org/extension/gunnargrosch/durable-viz).
 
 You can also search **"Durable Viz"** in the Extensions panel, or run:
 
