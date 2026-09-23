@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0] - 2026-09-23
+
+### Added
+
+- **Go parser** for the [AWS Durable Execution SDK for Go](https://github.com/aws/aws-durable-execution-sdk-go) (preview, module `github.com/aws/aws-durable-execution-sdk-go`). Finds `durable.Start(handler)` / `durable.Wrap(handler)` entry points, resolves the SDK import alias, and extracts the package-level generic primitives whose name is the second argument (`durable.Step(ctx, "greet", ...)`). Resolves local string constants for dynamic names, follows same-file helper functions that accept a `durable.Context`, balances parentheses across multi-line calls so nested operations stay inside their compound node, and reads branch names from `durable.Branch[T]{Name: "..."}`. Concurrency combinators (`All`, `AllSettled`, `Any`, `Race`, `Join`, `Select`) map to the promise-combinator kinds and `Go` maps to a child context.
+- **Go code generation.** The builder emits a `package main` handler with `durable.Start(handler)`, per-primitive snippets, branch literals, `WithMaxConcurrency`, `WithCompletion`, `WithNesting`, `WithChildVirtual`, `WithSemantics`, `WithRetry`, and `WithTenantID`, including conditional `time` and `aws` imports.
+- Two Go examples: `order_workflow.go` (basic) and `order_workflow_config.go` (config features and combinators).
+- Go support in the VS Code Build-mode palette, code-generation target, and `.go` editor title activation.
+- Robust Go scanning: string, rune, and comment contents are masked before structural analysis, so durable-looking text inside them is ignored and delimiters cannot confuse brace/paren matching; nested generic type arguments are handled.
+
 ## [0.7.0] - 2026-08-25
 
 ### Added

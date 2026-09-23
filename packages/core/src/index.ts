@@ -4,6 +4,7 @@ export { PythonParser } from './parsers/python.js'
 export { JavaParser } from './parsers/java.js'
 export { CSharpParser } from './parsers/csharp.js'
 export { RustParser } from './parsers/rust.js'
+export { GoParser } from './parsers/go.js'
 export { renderMermaid, type MermaidOptions } from './renderers/mermaid.js'
 export { generateCode, type CodeGenLanguage, type CodeGenOptions } from './renderers/codegen.js'
 export type {

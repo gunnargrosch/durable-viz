@@ -5,7 +5,7 @@ Visualize and build [AWS Lambda Durable Functions](https://docs.aws.amazon.com/l
 - **View mode:** Parse handler code and render an interactive flowchart.
 - **Build mode:** Design workflows from scratch and generate handler boilerplate.
 
-Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, and **Rust** runtimes.
+Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes.
 
 ## Features
 
@@ -22,7 +22,7 @@ Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, and **R
 - **Drag-and-drop palette** with 15 primitives filtered by language.
 - **Click-to-connect edges.** Conditions auto-label `if`/`else` branches.
 - **Compound nodes** for Parallel/Map with drag-to-nest.
-- **Code generation** in TypeScript, Python, Java, C#, and Rust.
+- **Code generation** in TypeScript, Python, Java, C#, Rust, and Go.
 - **Mermaid preview**, **save/load JSON**, **undo/redo**.
 
 ## Usage
@@ -32,7 +32,7 @@ Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, and **R
 | **View** | `Durable Viz: Open Lambda Durable Function Workflow` |
 | **Build** | `Durable Viz: Build Workflow Diagram` |
 
-A toolbar button also appears in the editor title bar for `.ts`, `.js`, `.py`, `.java`, `.cs`, and `.rs` files.
+A toolbar button also appears in the editor title bar for `.ts`, `.js`, `.py`, `.java`, `.cs`, `.rs`, and `.go` files.
 
 ## Supported Languages
 
@@ -43,6 +43,7 @@ A toolbar button also appears in the editor title bar for `.ts`, `.js`, `.py`, `
 | Java | `extends DurableHandler` | `aws-durable-execution-sdk-java` |
 | C# (.NET) | `DurableFunction.WrapAsync` or `[DurableExecution]` | `Amazon.Lambda.DurableExecution` |
 | Rust | `durable::run(handler)` | `aws-durable-execution-sdk` |
+| Go | `durable.Start(handler)` | `aws-durable-execution-sdk-go` |
 
 ## Links
 

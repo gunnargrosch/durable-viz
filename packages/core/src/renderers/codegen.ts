@@ -1,11 +1,12 @@
 /**
  * Code generation from WorkflowGraph.
- * Produces boilerplate handler code for TypeScript, Python, and Java.
+ * Produces boilerplate handler code for TypeScript, Python, Java, C#, Rust,
+ * and Go.
  */
 
 import type { WorkflowGraph, WorkflowNode } from '../graph.js'
 
-export type CodeGenLanguage = 'typescript' | 'python' | 'java' | 'csharp' | 'rust'
+export type CodeGenLanguage = 'typescript' | 'python' | 'java' | 'csharp' | 'rust' | 'go'
 
 export interface CodeGenOptions {
   language: CodeGenLanguage
@@ -36,6 +37,7 @@ function varName(label: string, used: Set<string>): string {
 // ---------------------------------------------------------------------------
 
 const IDENT = '  '
+const GO_IDENT = '\t'
 
 /** Wrap a block of code in an if/else structure when condition is present. */
 interface ConditionRegion {
@@ -931,6 +933,212 @@ function genRustNode(
 }
 
 // ---------------------------------------------------------------------------
+// Go code generation
+// ---------------------------------------------------------------------------
+
+/** Build the `durable.WithMaxConcurrency` / `WithCompletion` / `WithNesting` options
+ * trailing a Go batch call (Parallel/Map). */
+function goBatchOptions(node: WorkflowNode): string {
+  const parts: string[] = []
+  if (node.nestingType === 'FLAT') parts.push('durable.WithNesting(durable.NestingFlat)')
+  if (node.maxConcurrency != null) parts.push(`durable.WithMaxConcurrency(${node.maxConcurrency})`)
+  if (node.completionConfig) {
+    const fields: string[] = []
+    const min = node.completionConfig.match(/minSuccessful:\s*(\d+)/)
+    if (min) fields.push(`MinSuccessful: ${min[1]}`)
+    const count = node.completionConfig.match(/toleratedFailures:\s*(\d+)/)
+    if (count) fields.push(`ToleratedFailureCount: aws.Int(${count[1]})`)
+    const pct = node.completionConfig.match(/toleratedPct:\s*(\d+)%?/)
+    if (pct) fields.push(`ToleratedFailurePercentage: aws.Int(${pct[1]})`)
+    if (fields.length > 0) parts.push(`durable.WithCompletion(durable.CompletionConfig{${fields.join(', ')}})`)
+  }
+  return parts.map((p) => `, ${p}`).join('')
+}
+
+export function generateGo(graph: WorkflowGraph): string {
+  const conditionRegions = findConditionRegions(graph)
+  const generatedIds = new Set<string>()
+  const usedNames = new Set<string>()
+  const lines: string[] = []
+
+  const needsTime = graph.nodes.some((n) =>
+    n.kind === 'wait' || (n.timeout != null && /time\./.test(n.timeout))
+  )
+  const needsAws = graph.nodes.some((n) => /tolerated/.test(n.completionConfig ?? ''))
+
+  lines.push('package main')
+  lines.push('')
+  lines.push('import (')
+  lines.push(`${GO_IDENT}"github.com/aws/aws-durable-execution-sdk-go/durable"`)
+  if (needsAws) lines.push(`${GO_IDENT}"github.com/aws/aws-sdk-go-v2/aws"`)
+  if (needsTime) lines.push(`${GO_IDENT}"time"`)
+  lines.push(')')
+  lines.push('')
+  lines.push('func handler(ctx durable.Context, event any) (any, error) {')
+
+  const workflowNodes = graph.nodes.filter((n) => n.kind !== 'start' && n.kind !== 'end')
+  let i = 0
+
+  function emitCondition(node: WorkflowNode, indent: number) {
+    const region = conditionRegions.get(node.id)
+    if (!region) return
+    generatedIds.add(node.id)
+    const pad = GO_IDENT.repeat(indent)
+
+    lines.push(`${pad}if ${node.condition ?? node.label} {`)
+
+    for (const tn of region.thenNodes) {
+      if (tn.kind === 'start' || tn.kind === 'end') continue
+      if (tn.kind === 'condition') {
+        emitCondition(tn, indent + 1)
+      } else {
+        lines.push(genGoNode(tn, indent + 1, generatedIds, usedNames))
+      }
+    }
+
+    lines.push(`${pad}}`)
+
+    if (region.elseNodes && region.elseNodes.length > 0) {
+      lines.push(`${pad}else {`)
+      for (const en of region.elseNodes) {
+        if (en.kind === 'start' || en.kind === 'end') continue
+        if (en.kind === 'condition') {
+          emitCondition(en, indent + 1)
+        } else {
+          lines.push(genGoNode(en, indent + 1, generatedIds, usedNames))
+        }
+      }
+      lines.push(`${pad}}`)
+    }
+  }
+
+  while (i < workflowNodes.length) {
+    const node = workflowNodes[i]
+
+    if (generatedIds.has(node.id)) {
+      i++
+      continue
+    }
+
+    if (node.kind === 'condition') {
+      emitCondition(node, 1)
+      lines.push('')
+      i += (node.thenCount ?? 1) + 1
+      continue
+    }
+
+    if (!generatedIds.has(node.id)) {
+      const code = genGoNode(node, 1, generatedIds, usedNames)
+      if (code) lines.push(code)
+      lines.push('')
+    }
+    i++
+  }
+
+  lines.push(`${GO_IDENT}return map[string]any{"status": "completed"}, nil`)
+  lines.push('}')
+  lines.push('')
+  lines.push('func main() {')
+  lines.push(`${GO_IDENT}durable.Start(handler)`)
+  lines.push('}')
+  lines.push('')
+
+  return lines.join('\n')
+}
+
+function genGoNode(
+  node: WorkflowNode,
+  indent: number,
+  generatedIds: Set<string>,
+  usedNames: Set<string>
+): string {
+  const pad = GO_IDENT.repeat(indent)
+  const vname = varName(node.label, usedNames)
+  generatedIds.add(node.id)
+
+  const errCheck = `\n${pad}if err != nil {\n${pad}${GO_IDENT}return nil, err\n${pad}}\n${pad}_ = ${vname}`
+
+  switch (node.kind) {
+    case 'step': {
+      const opts: string[] = []
+      if (node.stepSemantics === 'AtMostOncePerRetry') opts.push('durable.WithSemantics(durable.AtMostOncePerRetry)')
+      if (node.retryStrategy) opts.push(`durable.WithRetry(${goRetryStrategy(node.retryStrategy)})`)
+      const args = opts.length ? `, ${opts.join(', ')}` : ''
+      return `${pad}${vname}, err := durable.Step(ctx, "${node.label}", func(stepCtx durable.StepContext) (any, error) {\n${pad}${GO_IDENT}// TODO: implement ${node.label}\n${pad}${GO_IDENT}return nil, nil\n${pad}}${args})${errCheck}`
+    }
+
+    case 'invoke': {
+      const tenant = node.tenantId ? `, durable.WithTenantID("${node.tenantId}")` : ''
+      return `${pad}${vname}, err := durable.Invoke[any, any](ctx, "${node.label}", "${node.target ?? 'MyFunction'}", nil${tenant})${errCheck}`
+    }
+
+    case 'wait': {
+      const duration = node.timeout && /time\./.test(node.timeout) ? node.timeout : '30*time.Second'
+      return `${pad}if err := durable.Wait(ctx, "${node.label}", ${duration}); err != nil {\n${pad}${GO_IDENT}return nil, err\n${pad}}`
+    }
+
+    case 'waitForCallback': {
+      const timeout = node.timeout && /time\./.test(node.timeout) ? `, durable.WithCallbackTimeout(${node.timeout})` : ''
+      return `${pad}${vname}, err := durable.WaitForCallback[any](ctx, "${node.label}", func(stepCtx durable.StepContext, callbackID string) error {\n${pad}${GO_IDENT}// TODO: notify external system with callbackID\n${pad}${GO_IDENT}return nil\n${pad}}${timeout})${errCheck}`
+    }
+
+    case 'createCallback': {
+      const timeout = node.timeout && /time\./.test(node.timeout) ? `, durable.WithCallbackTimeout(${node.timeout})` : ''
+      return `${pad}${vname}, err := durable.CreateCallback[any](ctx, "${node.label}"${timeout})${errCheck}`
+    }
+
+    case 'waitForCondition':
+      return `${pad}${vname}, err := durable.WaitForCondition[any](ctx, "${node.label}", func(stepCtx durable.StepContext, state any) (any, error) {\n${pad}${GO_IDENT}// TODO: poll and update state\n${pad}${GO_IDENT}return state, nil\n${pad}}, durable.ConditionConfig[any]{})${errCheck}`
+
+    case 'parallel': {
+      const opts = goBatchOptions(node)
+      if (!node.branches?.length) {
+        return `${pad}${vname}, err := durable.Parallel[any](ctx, "${node.label}", []durable.Branch[any]{}${opts})${errCheck}`
+      }
+      const branches = node.branches.map((b) =>
+        `${pad}${GO_IDENT}{Name: "${b.name}", Func: func(ctx durable.Context) (any, error) {\n${pad}${GO_IDENT}${GO_IDENT}// TODO: implement ${b.name}\n${pad}${GO_IDENT}${GO_IDENT}return nil, nil\n${pad}${GO_IDENT}}},`
+      ).join('\n')
+      return `${pad}${vname}, err := durable.Parallel[any](ctx, "${node.label}", []durable.Branch[any]{\n${branches}\n${pad}}${opts})${errCheck}`
+    }
+
+    case 'map': {
+      const opts = goBatchOptions(node)
+      return `${pad}${vname}, err := durable.Map[any, any](ctx, "${node.label}", []any{}, func(ctx durable.Context, item any, index int) (any, error) {\n${pad}${GO_IDENT}// TODO: process item\n${pad}${GO_IDENT}return nil, nil\n${pad}}${opts})${errCheck}`
+    }
+
+    case 'runInChildContext': {
+      const opts = node.nestingType === 'FLAT' ? ', durable.WithChildVirtual()' : ''
+      return `${pad}${vname}, err := durable.RunInChildContext[any](ctx, "${node.label}", func(child durable.Context) (any, error) {\n${pad}${GO_IDENT}// TODO: implement ${node.label} in child context\n${pad}${GO_IDENT}return nil, nil\n${pad}}${opts})${errCheck}`
+    }
+
+    case 'withRetry':
+      return `${pad}${vname}, err := durable.Retry[any](ctx, "${node.label}", func(retryCtx durable.Context, attempt int) (any, error) {\n${pad}${GO_IDENT}// TODO: implement ${node.label} with retry\n${pad}${GO_IDENT}return nil, nil\n${pad}}, ${goRetryStrategy(node.retryStrategy)})${errCheck}`
+
+    case 'promiseAll':
+      return `${pad}${vname}, err := durable.All[any](ctx, "${node.label}", []*durable.Future[any]{\n${pad}${GO_IDENT}// TODO: add operation futures\n${pad}})${errCheck}`
+    case 'promiseAny':
+      return `${pad}${vname}, err := durable.Any[any](ctx, "${node.label}", []*durable.Future[any]{\n${pad}${GO_IDENT}// TODO: add operation futures\n${pad}})${errCheck}`
+    case 'promiseRace':
+      return `${pad}${vname}, err := durable.Race[any](ctx, "${node.label}", []*durable.Future[any]{\n${pad}${GO_IDENT}// TODO: add operation futures\n${pad}})${errCheck}`
+    case 'promiseAllSettled':
+      return `${pad}${vname}, err := durable.AllSettled[any](ctx, "${node.label}", []*durable.Future[any]{\n${pad}${GO_IDENT}// TODO: add operation futures\n${pad}})${errCheck}`
+
+    case 'condition':
+    case 'start':
+    case 'end':
+      return ''
+  }
+}
+
+/** Map a parsed strategy name back to Go: known constructors get called, variables pass through. */
+function goRetryStrategy(strategy: string | undefined): string {
+  if (!strategy) return 'durable.ExponentialBackoff()'
+  if (strategy === 'ExponentialBackoff' || strategy === 'NoRetry') return `durable.${strategy}()`
+  if (/^[a-z]/.test(strategy)) return strategy
+  return 'durable.ExponentialBackoff()'
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -946,6 +1154,8 @@ export function generateCode(graph: WorkflowGraph, options: CodeGenOptions): str
       return generateCSharp(graph)
     case 'rust':
       return generateRust(graph)
+    case 'go':
+      return generateGo(graph)
   }
 }
 

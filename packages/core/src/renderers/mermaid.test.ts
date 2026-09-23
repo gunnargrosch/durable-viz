@@ -107,4 +107,17 @@ describe('renderMermaid', () => {
     assert.ok(output.includes('concurrency 2'), 'Should show max_concurrency annotation')
     assert.ok(output.includes('manager-approval'), 'Should include the callback label')
   })
+
+  it('renders Go primitives, subgraphs, and config annotations', () => {
+    const graph = parseFile(resolve(examplesDir, 'order_workflow_config.go'))
+    const output = renderMermaid(graph)
+
+    assert.ok(output.includes('charge-payment'), 'Should include the Go step label')
+    assert.ok(output.includes('reserve-inventory'), 'Should include the Go map label')
+    assert.ok(output.includes('subgraph'), 'Should wrap map branches in a subgraph')
+    assert.ok(output.includes('AtMostOncePerRetry'), 'Should show step semantics annotation')
+    assert.ok(output.includes('tenant tenant-001'), 'Should show tenant ID annotation')
+    assert.ok(output.includes('flat'), 'Should show FLAT nesting annotation')
+    assert.ok(output.includes('concurrency 4'), 'Should show maxConcurrency annotation')
+  })
 })
