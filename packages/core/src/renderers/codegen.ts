@@ -218,6 +218,7 @@ function genTypeScriptNode(
       return `${pad}const ${vname} = await context.promise.allSettled('${node.label}', [\n${pad}${IDENT}// TODO: add promises\n${pad}]);`
 
     case 'condition':
+    case 'loop':
     case 'start':
     case 'end':
       return ''
@@ -926,6 +927,7 @@ function genRustNode(
     case 'promiseAllSettled':
       return `${pad}let ${vname} = ctx.join_all([\n${pad}${IDENT}// TODO: add operation futures (e.g. ctx.step(...).name("x").future())\n${pad}]).name("${node.label}").await?;`
     case 'condition':
+    case 'loop':
     case 'start':
     case 'end':
       return ''
@@ -1124,6 +1126,7 @@ function genGoNode(
       return `${pad}${vname}, err := durable.AllSettled[any](ctx, "${node.label}", []*durable.Future[any]{\n${pad}${GO_IDENT}// TODO: add operation futures\n${pad}})${errCheck}`
 
     case 'condition':
+    case 'loop':
     case 'start':
     case 'end':
       return ''

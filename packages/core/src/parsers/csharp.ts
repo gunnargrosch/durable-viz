@@ -24,7 +24,8 @@
 
 import { readFileSync } from 'node:fs'
 import type { WorkflowNode, WorkflowBranch, WorkflowGraph } from '../graph.js'
-import { buildEdges } from '../graph.js'
+import { buildEdges, loopLabel } from '../graph.js'
+import { parseCStyleLoopHead, cStyleLoopIterations, doWhileCondition } from './c-style-loops.js'
 import type { Parser, ParseOptions } from '../parser.js'
 import { basename } from 'node:path'
 
@@ -143,6 +144,11 @@ function extractBlock(source: string, startIdx: number): string {
   return source.slice(startIdx, i - 1)
 }
 
+/** Count newline characters in body[from, to). */
+function countNewlines(body: string, from: number, to: number): number {
+  return body.slice(from, to).split('\n').length - 1
+}
+
 /**
  * Extract durable primitives from a block of C# code.
  */
@@ -155,6 +161,14 @@ function extractNodes(
   const nodes: WorkflowNode[] = []
   const lines = body.split('\n')
 
+  // Character offset of each line within `body`, for locating braces.
+  const lineStarts: number[] = []
+  let offset = 0
+  for (const rawLine of lines) {
+    lineStarts.push(offset)
+    offset += rawLine.length + 1
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
     const absLine = baseLineOffset + i
@@ -164,11 +178,12 @@ function extractNodes(
     // if (condition) { ... } or Allman-style if (condition)\n{ → condition node
     const ifMatch = line.match(/^if\s*\((.+?)\)/)
     if (ifMatch) {
-      let braceIdx = body.indexOf('{', body.indexOf(line))
+      const lineIdx = lineStarts[i] + (lines[i].length - lines[i].trimStart().length)
+      let braceIdx = body.indexOf('{', lineIdx)
       // Handle Allman style: brace on next line
-      if (braceIdx === -1 || body.slice(body.indexOf(line) + line.length, braceIdx).trim() !== '') {
+      if (braceIdx === -1 || body.slice(lineIdx + line.length, braceIdx).trim() !== '') {
         // Look from the start of the line after if
-        const lineEnd = body.indexOf('\n', body.indexOf(line))
+        const lineEnd = body.indexOf('\n', lineIdx)
         const afterLine = lineEnd >= 0 ? body.indexOf('{', lineEnd) : -1
         if (afterLine >= 0) braceIdx = afterLine
       }
@@ -176,8 +191,9 @@ function extractNodes(
 
       const condition = ifMatch[1]
       const ifBody = extractBlock(body, braceIdx + 1)
-      const ifBodyOffset = baseLineOffset + i + 1
-      const thenNodes = extractNodes(ifBody, contextNames, source, ifBodyOffset)
+      // The body text starts on the line that holds the opening brace
+      const braceLine = i + countNewlines(body, lineIdx, braceIdx)
+      const thenNodes = extractNodes(ifBody, contextNames, source, baseLineOffset + braceLine)
 
       if (thenNodes.length > 0) {
         const thenReturns = ifBody.trim().split('\n').pop()?.trim().startsWith('return ') ?? false
@@ -193,9 +209,52 @@ function extractNodes(
         })
         nodes.push(...thenNodes)
 
-        const ifBodyLines = ifBody.split('\n').length
-        i += ifBodyLines + 1
+        // Land on the closing brace line; the for loop's i++ moves past it.
+        i = braceLine + ifBody.split('\n').length - 1
         continue
+      }
+    }
+
+    // for / foreach / while / do-while → loop node followed by the loop body.
+    // The opening brace is either at the end of the line or alone on the next one.
+    const loopHead = parseCStyleLoopHead(line)
+    if (loopHead && (loopHead.rest === '{' || loopHead.rest === '')) {
+      let braceLine = i
+      let braceIdx = -1
+      if (loopHead.rest === '{') {
+        braceIdx = lineStarts[i] + lines[i].replace(/\s*\/\/.*$/, '').trimEnd().length - 1
+      } else {
+        let next = i + 1
+        while (next < lines.length && lines[next].trim() === '') next++
+        if (next < lines.length && lines[next].trim() === '{') {
+          braceLine = next
+          braceIdx = lineStarts[next] + lines[next].indexOf('{')
+        }
+      }
+
+      if (braceIdx >= 0) {
+        const loopBody = extractBlock(body, braceIdx + 1)
+        const bodyNodes = extractNodes(loopBody, contextNames, source, baseLineOffset + braceLine)
+
+        if (bodyNodes.length > 0) {
+          const header = loopHead.keyword === 'do'
+            ? doWhileCondition(body, braceIdx + 1 + loopBody.length)
+            : loopHead.header
+          const iterations = cStyleLoopIterations(loopHead)
+          nodes.push({
+            id: nextId('loop'),
+            kind: 'loop',
+            label: loopLabel(header, iterations),
+            loopHeader: header,
+            bodyCount: bodyNodes.length,
+            iterations,
+            sourceLine: absLine,
+          })
+          nodes.push(...bodyNodes)
+          // Land on the closing brace line; the for loop's i++ moves past it.
+          i = braceLine + loopBody.split('\n').length - 1
+          continue
+        }
       }
     }
 

@@ -265,6 +265,7 @@ ${mermaid}
     <div class="legend-item"><div class="legend-swatch" style="background:#7b6b9e"></div> Parallel / Map</div>
     <div class="legend-item"><div class="legend-swatch" style="background:#b05a5a"></div> Wait / Callback</div>
     <div class="legend-item"><div class="legend-swatch" style="background:#6b71a8"></div> Condition</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#7d8a3e"></div> Loop</div>
     <div class="legend-item"><div class="legend-swatch" style="background:#4a849e"></div> Child Context</div>
   </div>
   <script type="application/json" id="graph-json">${graphJson}</script>

@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] - 2026-10-07
+
+### Added
+
+- **Loop support in View mode, all six languages.** `for`, `for...of`/`for...in`, `while`, and `do...while` (TypeScript), `for`, `while`, and `async for` (Python), `for`, enhanced `for`, `while`, and `do...while` (Java), `for`, `foreach`, `while`, and `do...while` (C#, including Allman braces), `for`, `while`, `while let`, and `loop` with labels (Rust), and every `for` form including `range` (Go). A loop that wraps durable calls becomes a `loop` node; its body is drawn in a dashed box, a dashed `next` edge returns to the loop node, and a `done` edge leaves it. Conditions, parallel nodes, and other loops nest inside the body. Literal iteration counts (`i < 3`, `range(3)`, `0..3`) are shown as `x3`.
+- `buildEdges` returns to the enclosing loop header from the end of a loop body, including when the body ends with a condition or a parallel node.
+- A Loop entry in the legend of the extension and the CLI HTML output. Long loop headers wrap onto several lines.
+- Six loop examples (`order-batch-loop.ts`, `order_batch_loop.py`, `OrderBatchLoop.java`, `OrderBatchLoop.cs`, `order_batch_loop.rs`, `order_batch_loop.go`).
+
+### Fixed
+
+- Go, Rust, Java, and C# skipped the statement that directly follows an `if` block when no blank line separated them, so for example a `charge` step after `if vip { ... }` disappeared from the diagram. Python was not affected.
+- Source lines of operations inside an `if` block were one too high in Go, Rust, Java, and C# (Allman-style C# was already correct), so click-to-navigate landed on the next line.
+- C# and Python now locate an `if` block by its own line instead of the first identical line, which matters when the same line appears more than once.
+- Condition labels lost `<`, `>`, parentheses, brackets, braces, and pipes (`order.Total > 10000` showed as `order.Total 10000`, `items.iter()` as `items.iter`). Condition and loop labels are now quoted in the Mermaid output, so they appear as written.
+- CLI `--version` is read from `packages/cli/package.json` at build time instead of a hardcoded string, so it can no longer drift from the released version.
+- `pnpm test` in `@durable-viz/core` ran only the test files in subdirectories under `sh`, because `**` was not expanded recursively. The script now lists both levels explicitly.
+
+### Documentation
+
+- README: added the missing `order_workflow_config.rs` example and fixed the code generation languages in the project structure (Go was missing).
+
 ## [0.8.0] - 2026-09-23
 
 ### Added

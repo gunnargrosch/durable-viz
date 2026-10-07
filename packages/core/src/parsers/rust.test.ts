@@ -169,4 +169,57 @@ describe('RustParser', () => {
     assert.equal(step.stepSemantics, 'AtMostOncePerRetry')
     assert.equal(step.retryStrategy, 'retry_strategy')
   })
+
+  describe('loops', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'rust_loops.rs'))
+    const loops = graph.nodes.filter((n) => n.kind === 'loop')
+
+    it('should emit a loop node for for, while and loop statements', () => {
+      assert.deepEqual(loops.map((n) => n.loopHeader), ['order in orders.iter()', 'attempt in 0..3', '!done', ''])
+    })
+
+    it('should not emit a loop node when the body has no durable calls', () => {
+      assert.ok(!graph.nodes.some((n) => n.loopHeader?.includes('ignored')))
+    })
+
+    it('should include a nested condition, its branch and the step after it in the body count', () => {
+      const orderLoop = loops[0]
+      const index = graph.nodes.indexOf(orderLoop)
+      const body = graph.nodes.slice(index + 1, index + 1 + (orderLoop.bodyCount ?? 0))
+
+      assert.deepEqual(body.map((n) => n.label), ['validate', 'order == "vip"', 'vip-perk', 'charge'])
+    })
+
+    it('should detect literal range counts', () => {
+      assert.equal(loops[1].iterations, 3)
+      assert.equal(loops[1].label, 'loop: attempt in 0..3 x3')
+      assert.equal(loops[0].iterations, undefined)
+    })
+
+    it('should handle a labeled while loop and a bare loop', () => {
+      assert.equal(loops[2].label, 'loop: !done')
+      assert.equal(loops[3].label, 'loop')
+    })
+
+    it('should report source lines for the loop and the steps inside it', () => {
+      const lines = Object.fromEntries(graph.nodes.map((n) => [n.label, n.sourceLine]))
+
+      assert.equal(loops[0].sourceLine, 8)
+      assert.equal(lines['validate'], 9)
+      assert.equal(lines['vip-perk'], 11)
+      assert.equal(lines['charge'], 13)
+    })
+
+    it('should keep steps after the loops', () => {
+      const steps = graph.nodes.filter((n) => n.kind === 'step').map((n) => n.label)
+      assert.equal(steps[steps.length - 1], 'finish')
+    })
+
+    it('should connect each loop with a back-edge and a done edge', () => {
+      for (const loop of loops) {
+        assert.ok(graph.edges.some((e) => e.to === loop.id && e.style === 'back'))
+        assert.equal(graph.edges.filter((e) => e.from === loop.id && e.label === 'done').length, 1)
+      }
+    })
+  })
 })

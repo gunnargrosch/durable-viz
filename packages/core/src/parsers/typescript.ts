@@ -14,13 +14,18 @@ import {
   type Node,
   type Block,
   type IfStatement,
+  type ForStatement,
+  type ForOfStatement,
+  type ForInStatement,
+  type WhileStatement,
+  type DoStatement,
   type SourceFile,
   type FunctionDeclaration,
   type ArrowFunction,
   type FunctionExpression,
 } from 'ts-morph'
 import type { WorkflowNode, WorkflowBranch, WorkflowGraph } from '../graph.js'
-import { buildEdges } from '../graph.js'
+import { buildEdges, loopLabel } from '../graph.js'
 import type { Parser, ParseOptions } from '../parser.js'
 
 // ---------------------------------------------------------------------------
@@ -185,6 +190,63 @@ function getChildStatements(node: Node): Node[] {
     return (node as Block).getStatements()
   }
   return [node]
+}
+
+// ---------------------------------------------------------------------------
+// Loop helpers
+// ---------------------------------------------------------------------------
+
+type LoopStatement = ForStatement | ForOfStatement | ForInStatement | WhileStatement | DoStatement
+
+const LOOP_KINDS = new Set<SyntaxKind>([
+  SyntaxKind.ForStatement,
+  SyntaxKind.ForOfStatement,
+  SyntaxKind.ForInStatement,
+  SyntaxKind.WhileStatement,
+  SyntaxKind.DoStatement,
+])
+
+/** Count iterations for `for (let i = 0; i < 3; i++)` style loops with literal bounds. */
+function getForIterations(loop: ForStatement): number | undefined {
+  const init = loop.getInitializer()?.getText().match(/^(?:let|var)\s+(\w+)\s*=\s*(\d+)$/)
+  const condition = loop.getCondition()?.getText().match(/^(\w+)\s*(<=|<)\s*(\d+)$/)
+  const increment = loop.getIncrementor()?.getText().match(/^(?:(\w+)\+\+|\+\+(\w+)|(\w+)\s*\+=\s*1)$/)
+  if (!init || !condition || !increment) return undefined
+  const variable = init[1]
+  if (condition[1] !== variable || ![increment[1], increment[2], increment[3]].includes(variable)) return undefined
+  const count = Number(condition[3]) - Number(init[2]) + (condition[2] === '<=' ? 1 : 0)
+  return count > 0 ? count : undefined
+}
+
+/** Describe a loop statement: its header text, iteration count, and the expression evaluated once before it starts. */
+function describeLoop(loop: LoopStatement): { header: string; iterations?: number; iterable?: Node } {
+  switch (loop.getKind()) {
+    case SyntaxKind.ForStatement: {
+      const forLoop = loop as ForStatement
+      const header = [forLoop.getInitializer()?.getText(), forLoop.getCondition()?.getText(), forLoop.getIncrementor()?.getText()]
+        .map((part) => part ?? '')
+        .join('; ')
+      return { header, iterations: getForIterations(forLoop) }
+    }
+    case SyntaxKind.ForOfStatement: {
+      const forOf = loop as ForOfStatement
+      const iterable = forOf.getExpression()
+      const array = iterable.asKind(SyntaxKind.ArrayLiteralExpression)
+      return {
+        header: `${forOf.isAwaited() ? 'await ' : ''}${forOf.getInitializer().getText()} of ${iterable.getText()}`,
+        iterations: array ? array.getElements().length || undefined : undefined,
+        iterable,
+      }
+    }
+    case SyntaxKind.ForInStatement: {
+      const forIn = loop as ForInStatement
+      return { header: `${forIn.getInitializer().getText()} in ${forIn.getExpression().getText()}`, iterable: forIn.getExpression() }
+    }
+    case SyntaxKind.WhileStatement:
+      return { header: (loop as WhileStatement).getExpression().getText() }
+    default:
+      return { header: (loop as DoStatement).getExpression().getText() }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -481,6 +543,38 @@ function extractFromBlock(
           sourceLine: lineOf(ifStmt),
         })
         nodes.push(...thenNodes)
+        continue
+      }
+    }
+
+    // Loops that wrap durable calls become a loop node followed by the body
+    if (LOOP_KINDS.has(stmt.getKind())) {
+      const loop = stmt as LoopStatement
+      const { header, iterations, iterable } = describeLoop(loop)
+
+      const bodyNodes = extractFromBlock(
+        getChildStatements(loop.getStatement()),
+        contextNames,
+        durableFunctions,
+        visited,
+        sourceFile,
+      )
+
+      if (bodyNodes.length > 0) {
+        // A durable call in the iterable (for await ... of await ctx.step(...)) runs once, before the loop
+        if (iterable) {
+          nodes.push(...extractFromBlock([iterable], contextNames, durableFunctions, visited, sourceFile))
+        }
+        nodes.push({
+          id: nextId('loop'),
+          kind: 'loop',
+          label: loopLabel(header, iterations),
+          loopHeader: header,
+          bodyCount: bodyNodes.length,
+          iterations,
+          sourceLine: lineOf(loop),
+        })
+        nodes.push(...bodyNodes)
         continue
       }
     }

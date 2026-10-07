@@ -26,7 +26,7 @@
 
 import { readFileSync } from 'node:fs'
 import type { WorkflowNode, WorkflowBranch, WorkflowGraph } from '../graph.js'
-import { buildEdges } from '../graph.js'
+import { buildEdges, loopLabel } from '../graph.js'
 import type { Parser, ParseOptions } from '../parser.js'
 import { basename } from 'node:path'
 
@@ -551,6 +551,26 @@ function extractMapBranch(
 // Core extraction logic
 // ---------------------------------------------------------------------------
 
+/**
+ * Count iterations for Go loops with literal bounds:
+ * `for i := 0; i < 3; i++`, `for range 3` and `for i := range 3`.
+ */
+function goLoopIterations(header: string): number | undefined {
+  const counted = header.match(/^(\w+)\s*:?=\s*(\d+)\s*;\s*(\w+)\s*(<=|<)\s*(\d+)\s*;\s*(?:(\w+)\+\+|(\w+)\s*\+=\s*1)$/)
+  if (counted) {
+    const [, variable, start, conditionVariable, operator, limit, incrementA, incrementB] = counted
+    if (conditionVariable !== variable || (incrementA ?? incrementB) !== variable) return undefined
+    const count = Number(limit) - Number(start) + (operator === '<=' ? 1 : 0)
+    return count > 0 ? count : undefined
+  }
+  const ranged = header.match(/^(?:\w+\s*:?=\s*)?range\s+(\d+)$/)
+  if (ranged) {
+    const count = Number(ranged[1])
+    return count > 0 ? count : undefined
+  }
+  return undefined
+}
+
 function extractNodes(
   body: string,
   contextNames: string[],
@@ -596,7 +616,8 @@ function extractNodes(
         const indent = line.length - line.trimStart().length
         const braceIdx = lineStarts[i] + indent + braceInLine
         const ifBody = extractBlock(body, bodyMask, braceIdx)
-        const thenNodes = extractNodes(ifBody, contextNames, helpers, visited, source, absLine + 1, alias)
+        // The body text starts on the header line, so its first line is absLine
+        const thenNodes = extractNodes(ifBody, contextNames, helpers, visited, source, absLine, alias)
 
         if (thenNodes.length > 0) {
           const bodyLines = ifBody.trim().split('\n')
@@ -613,9 +634,37 @@ function extractNodes(
             sourceLine: absLine,
           })
           nodes.push(...thenNodes)
-          i += ifBody.split('\n').length
+          // Land on the closing brace line; the for loop's i++ moves past it.
+          i += ifBody.split('\n').length - 1
           continue
         }
+      }
+    }
+
+    // for ... { ... } → loop node followed by the loop body. The block opens at
+    // the trailing brace, since range headers can contain composite literals.
+    if (/^for(?=[\s{])/.test(maskTrimmed) && maskTrimmed.endsWith('{')) {
+      const header = trimmed.slice(3, trimmed.length - 1).trim()
+      const indent = line.length - line.trimStart().length
+      const braceIdx = lineStarts[i] + indent + maskTrimmed.length - 1
+      const loopBody = extractBlock(body, bodyMask, braceIdx)
+      const bodyNodes = extractNodes(loopBody, contextNames, helpers, visited, source, absLine, alias)
+
+      if (bodyNodes.length > 0) {
+        const iterations = goLoopIterations(header)
+        nodes.push({
+          id: nextId('loop'),
+          kind: 'loop',
+          label: loopLabel(header, iterations),
+          loopHeader: header,
+          bodyCount: bodyNodes.length,
+          iterations,
+          sourceLine: absLine,
+        })
+        nodes.push(...bodyNodes)
+        // Land on the closing brace line; the for loop's i++ moves past it.
+        i += loopBody.split('\n').length - 1
+        continue
       }
     }
 

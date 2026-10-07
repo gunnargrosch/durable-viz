@@ -13,6 +13,35 @@ function esc(text: string): string {
   return text.replace(/"/g, "'").replace(/[[\]{}()<>|]/g, ' ')
 }
 
+/**
+ * Escape text for a quoted Mermaid label. Inside quotes, parentheses, brackets,
+ * braces and pipes are safe, so code like `items.iter()` keeps them. Characters
+ * that Mermaid would read as markup or an entity are written as entity codes.
+ */
+function escQuoted(text: string): string {
+  return text
+    .replace(/#/g, '#35;')
+    .replace(/"/g, '#quot;')
+    .replace(/</g, '#lt;')
+    .replace(/>/g, '#gt;')
+}
+
+/** Break long labels at spaces so node width does not depend on the renderer's own wrapping. */
+function wrapLabel(text: string, maxLineLength = 24): string {
+  const lines: string[] = []
+  let current = ''
+  for (const word of text.split(' ')) {
+    if (current && (current + ' ' + word).length > maxLineLength) {
+      lines.push(current)
+      current = word
+    } else {
+      current = current ? `${current} ${word}` : word
+    }
+  }
+  if (current) lines.push(current)
+  return lines.join('<br>')
+}
+
 function buildAnnotation(node: WorkflowNode): string {
   const parts: string[] = []
   if (node.nestingType === 'FLAT') parts.push('flat')
@@ -25,7 +54,13 @@ function buildAnnotation(node: WorkflowNode): string {
 }
 
 function shapeForKind(node: WorkflowNode): string {
-  const label = esc(node.label) + buildAnnotation(node)
+  const quoted = node.kind === 'loop' || node.kind === 'condition'
+  const text = node.kind === 'loop'
+    ? wrapLabel(escQuoted(node.label))
+    : node.kind === 'condition'
+      ? escQuoted(node.label)
+      : esc(node.label)
+  const label = (quoted ? `"${text}${buildAnnotation(node)}"` : text + buildAnnotation(node))
   switch (node.kind) {
     case 'start':
     case 'end':
@@ -51,6 +86,8 @@ function shapeForKind(node: WorkflowNode): string {
       return `[[${label}]]`
     case 'condition':
       return `{${label}}`
+    case 'loop':
+      return `(${label})`
     default:
       return `[${label}]`
   }
@@ -62,11 +99,13 @@ function escEdge(text: string): string {
 }
 
 function renderEdge(edge: WorkflowEdge): string {
+  // Back-edges to a loop header are dashed so they read as "repeat"
+  const arrow = edge.style === 'back' ? '-.->' : '-->'
   if (edge.label) {
     const label = `&nbsp;&nbsp;${escEdge(edge.label)}&nbsp;&nbsp;`
-    return `  ${edge.from} -->|${label}| ${edge.to}`
+    return `  ${edge.from} ${arrow}|${label}| ${edge.to}`
   }
-  return `  ${edge.from} --> ${edge.to}`
+  return `  ${edge.from} ${arrow} ${edge.to}`
 }
 
 function styleForKind(node: WorkflowNode): string | undefined {
@@ -95,6 +134,8 @@ function styleForKind(node: WorkflowNode): string | undefined {
       return `style ${node.id} fill:#4a849e,stroke:#3d6d83,color:#deedf3`
     case 'condition':
       return `style ${node.id} fill:#6b71a8,stroke:#575c8a,color:#e3e4f0`
+    case 'loop':
+      return `style ${node.id} fill:#7d8a3e,stroke:#657131,color:#eef0dc`
     default:
       return undefined
   }
@@ -107,8 +148,15 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
   // Collect all nodes for styling and click callbacks
   const allNodes: WorkflowNode[] = []
 
-  // Emit node definitions, using subgraphs for parallel/map branches
-  for (const node of graph.nodes) {
+  const subgraphStyle = (subId: string) =>
+    `  style ${subId} fill:transparent,stroke:#444,stroke-width:1px,stroke-dasharray:5 5,rx:8,ry:8`
+
+  // Loop bodies are the flat nodes that follow a loop node. Track where each
+  // open loop subgraph ends so nested loops close in the right order.
+  const openLoops: { subId: string; endIndex: number }[] = []
+
+  // Emit node definitions, using subgraphs for parallel/map branches and loop bodies
+  graph.nodes.forEach((node, index) => {
     allNodes.push(node)
 
     const hasBranches = (node.kind === 'parallel' || node.kind === 'map') && node.branches?.length
@@ -130,11 +178,25 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
 
       lines.push('  end')
       // Style the subgraph container
-      lines.push(`  style ${subId} fill:transparent,stroke:#444,stroke-width:1px,stroke-dasharray:5 5,rx:8,ry:8`)
+      lines.push(subgraphStyle(subId))
+    } else if (node.kind === 'loop') {
+      // The loop header sits outside the subgraph, like a parallel hub
+      lines.push(`  ${node.id}${shapeForKind(node)}`)
+      const bodyEnd = Math.min(index + Math.max(node.bodyCount ?? 1, 1), graph.nodes.length - 1)
+      const subId = `sub_${node.id}`
+      lines.push(`  subgraph ${subId}[" "]`)
+      openLoops.push({ subId, endIndex: bodyEnd })
     } else {
       lines.push(`  ${node.id}${shapeForKind(node)}`)
     }
-  }
+
+    // Close every loop subgraph whose body ends at this node
+    while (openLoops.length > 0 && openLoops[openLoops.length - 1].endIndex <= index) {
+      const closed = openLoops.pop()!
+      lines.push('  end')
+      lines.push(subgraphStyle(closed.subId))
+    }
+  })
 
   lines.push('')
 

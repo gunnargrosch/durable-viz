@@ -200,4 +200,88 @@ describe('TypeScriptParser', () => {
     assert.equal(labels.filter((l) => l === 'finalize-ok').length, 1, 'Should have exactly one finalize-ok')
     assert.equal(labels.filter((l) => l === 'finalize-err').length, 1, 'Should have exactly one finalize-err')
   })
+
+  describe('loops', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'loops.ts'))
+    const loops = graph.nodes.filter((n) => n.kind === 'loop')
+
+    it('should emit a loop node for each loop that wraps durable calls', () => {
+      assert.deepEqual(loops.map((n) => n.loopHeader), [
+        'const order of event.orders',
+        'let attempt = 0; attempt < 3; attempt++',
+        'true',
+        "const region of ['us', 'eu']",
+      ])
+    })
+
+    it('should not emit a loop node when the body has no durable calls', () => {
+      assert.ok(!graph.nodes.some((n) => n.loopHeader?.includes('skipped')))
+    })
+
+    it('should count the body nodes including a nested condition and its branch', () => {
+      const orderLoop = loops[0]
+      const index = graph.nodes.indexOf(orderLoop)
+      const body = graph.nodes.slice(index + 1, index + 1 + (orderLoop.bodyCount ?? 0))
+
+      assert.deepEqual(body.map((n) => n.label), ['validate', 'order.startsWith(\'vip\')', 'vip-perk', 'charge'])
+      assert.equal(orderLoop.bodyCount, 4)
+    })
+
+    it('should detect literal iteration counts', () => {
+      assert.equal(loops[1].iterations, 3)
+      assert.equal(loops[1].label, 'loop: let attempt = 0; attempt < 3; attempt++ x3')
+      assert.equal(loops[3].iterations, 2)
+      assert.equal(loops[0].iterations, undefined)
+      assert.equal(loops[2].iterations, undefined)
+    })
+
+    it('should record the source line of the loop statement', () => {
+      assert.equal(loops[0].sourceLine, 6)
+    })
+
+    it('should treat a parallel node inside a loop as one body node', () => {
+      const regionLoop = loops[3]
+      const index = graph.nodes.indexOf(regionLoop)
+
+      assert.equal(regionLoop.bodyCount, 1)
+      assert.equal(graph.nodes[index + 1].kind, 'parallel')
+    })
+
+    it('should connect each loop with a back-edge and a done edge', () => {
+      for (const loop of loops) {
+        const back = graph.edges.filter((e) => e.to === loop.id && e.style === 'back')
+        const done = graph.edges.filter((e) => e.from === loop.id && e.label === 'done')
+        assert.ok(back.length >= 1, `${loop.label} has a back-edge`)
+        assert.equal(done.length, 1, `${loop.label} has one done edge`)
+      }
+    })
+
+    it('should route the no edge of a condition inside a loop to the next body node', () => {
+      const cond = graph.nodes.find((n) => n.kind === 'condition' && n.label.includes('startsWith'))!
+      const noEdge = graph.edges.find((e) => e.from === cond.id && e.label === 'no')!
+      const target = graph.nodes.find((n) => n.id === noEdge.to)!
+
+      assert.equal(target.label, 'charge')
+    })
+
+    it('should place a durable call in a for-of iterable before the loop and handle nested loops', () => {
+      const nested = parser.parseFile(resolve(fixturesDir, 'loops-nested.ts'))
+      const labels = nested.nodes.map((n) => n.label)
+
+      assert.deepEqual(labels.slice(1, -1), [
+        'load',
+        'list',
+        'loop: const name of await context.step(\'list\', async () => names)',
+        'loop: const batch of event.batches',
+        'process',
+        'summarize',
+      ])
+
+      const outer = nested.nodes.find((n) => n.loopHeader?.startsWith('const name'))!
+      const inner = nested.nodes.find((n) => n.loopHeader?.startsWith('const batch'))!
+      assert.equal(outer.bodyCount, 3)
+      assert.equal(inner.bodyCount, 1)
+      assert.ok(nested.edges.some((e) => e.from === inner.id && e.label === 'done' && e.to !== outer.id))
+    })
+  })
 })

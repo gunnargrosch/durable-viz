@@ -154,4 +154,58 @@ describe('PythonParser', () => {
     assert.ok(labels.includes('validate_order'), 'Should extract name from multi-line call')
     assert.ok(labels.includes('process_payment'), 'Should extract name from multi-line call')
   })
+
+  describe('loops', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'loops.py'))
+    const loops = graph.nodes.filter((n) => n.kind === 'loop')
+
+    it('should emit a loop node for for, while and async for loops', () => {
+      assert.deepEqual(loops.map((n) => n.loopHeader), [
+        'order in event["orders"]',
+        'attempt in range(3)',
+        'not is_done()',
+        'item in stream(event)',
+      ])
+    })
+
+    it('should not emit a loop node when the body has no durable calls', () => {
+      assert.ok(!graph.nodes.some((n) => n.loopHeader?.includes('ignored')))
+    })
+
+    it('should include a nested condition, its branch and the step after it in the body count', () => {
+      const orderLoop = loops[0]
+      const index = graph.nodes.indexOf(orderLoop)
+      const body = graph.nodes.slice(index + 1, index + 1 + (orderLoop.bodyCount ?? 0))
+
+      assert.deepEqual(body.map((n) => n.label), ['validate', 'order["vip"]', 'vip-perk', 'charge'])
+    })
+
+    it('should detect range counts and ignore a trailing comment on the header', () => {
+      assert.equal(loops[1].iterations, 3)
+      assert.equal(loops[1].label, 'loop: attempt in range(3) x3')
+      assert.equal(loops[0].iterations, undefined)
+    })
+
+    it('should report source lines, including after a blank line at the start of a block', () => {
+      const lines = Object.fromEntries(graph.nodes.map((n) => [n.label, n.sourceLine]))
+
+      assert.equal(loops[0].sourceLine, 7)
+      assert.equal(lines['validate'], 8)
+      assert.equal(lines['vip-perk'], 10)
+      assert.equal(lines['charge'], 11)
+      assert.equal(lines['poll'], 18)
+    })
+
+    it('should keep steps after the loops', () => {
+      const steps = graph.nodes.filter((n) => n.kind === 'step').map((n) => n.label)
+      assert.equal(steps[steps.length - 1], 'finish')
+    })
+
+    it('should connect each loop with a back-edge and a done edge', () => {
+      for (const loop of loops) {
+        assert.ok(graph.edges.some((e) => e.to === loop.id && e.style === 'back'))
+        assert.equal(graph.edges.filter((e) => e.from === loop.id && e.label === 'done').length, 1)
+      }
+    })
+  })
 })
