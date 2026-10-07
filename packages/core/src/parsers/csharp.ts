@@ -143,6 +143,11 @@ function extractBlock(source: string, startIdx: number): string {
   return source.slice(startIdx, i - 1)
 }
 
+/** Count newline characters in body[from, to). */
+function countNewlines(body: string, from: number, to: number): number {
+  return body.slice(from, to).split('\n').length - 1
+}
+
 /**
  * Extract durable primitives from a block of C# code.
  */
@@ -155,6 +160,14 @@ function extractNodes(
   const nodes: WorkflowNode[] = []
   const lines = body.split('\n')
 
+  // Character offset of each line within `body`, for locating braces.
+  const lineStarts: number[] = []
+  let offset = 0
+  for (const rawLine of lines) {
+    lineStarts.push(offset)
+    offset += rawLine.length + 1
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
     const absLine = baseLineOffset + i
@@ -164,11 +177,12 @@ function extractNodes(
     // if (condition) { ... } or Allman-style if (condition)\n{ → condition node
     const ifMatch = line.match(/^if\s*\((.+?)\)/)
     if (ifMatch) {
-      let braceIdx = body.indexOf('{', body.indexOf(line))
+      const lineIdx = lineStarts[i] + (lines[i].length - lines[i].trimStart().length)
+      let braceIdx = body.indexOf('{', lineIdx)
       // Handle Allman style: brace on next line
-      if (braceIdx === -1 || body.slice(body.indexOf(line) + line.length, braceIdx).trim() !== '') {
+      if (braceIdx === -1 || body.slice(lineIdx + line.length, braceIdx).trim() !== '') {
         // Look from the start of the line after if
-        const lineEnd = body.indexOf('\n', body.indexOf(line))
+        const lineEnd = body.indexOf('\n', lineIdx)
         const afterLine = lineEnd >= 0 ? body.indexOf('{', lineEnd) : -1
         if (afterLine >= 0) braceIdx = afterLine
       }
@@ -176,8 +190,9 @@ function extractNodes(
 
       const condition = ifMatch[1]
       const ifBody = extractBlock(body, braceIdx + 1)
-      const ifBodyOffset = baseLineOffset + i + 1
-      const thenNodes = extractNodes(ifBody, contextNames, source, ifBodyOffset)
+      // The body text starts on the line that holds the opening brace
+      const braceLine = i + countNewlines(body, lineIdx, braceIdx)
+      const thenNodes = extractNodes(ifBody, contextNames, source, baseLineOffset + braceLine)
 
       if (thenNodes.length > 0) {
         const thenReturns = ifBody.trim().split('\n').pop()?.trim().startsWith('return ') ?? false
@@ -193,8 +208,8 @@ function extractNodes(
         })
         nodes.push(...thenNodes)
 
-        const ifBodyLines = ifBody.split('\n').length
-        i += ifBodyLines + 1
+        // Land on the closing brace line; the for loop's i++ moves past it.
+        i = braceLine + ifBody.split('\n').length - 1
         continue
       }
     }

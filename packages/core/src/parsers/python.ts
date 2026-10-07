@@ -180,6 +180,21 @@ function extractNodes(
   const nodes: WorkflowNode[] = []
   const lines = body.split('\n')
 
+  // Character offset of each line within `body`.
+  const lineStarts: number[] = []
+  let offset = 0
+  for (const rawLine of lines) {
+    lineStarts.push(offset)
+    offset += rawLine.length + 1
+  }
+
+  /** Index of the first non-blank line after `index` (where an indented block starts). */
+  const blockFirstLine = (index: number): number => {
+    let next = index + 1
+    while (next < lines.length && lines[next].trim() === '') next++
+    return next
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
     const absLine = baseLineOffset + i
@@ -191,9 +206,10 @@ function extractNodes(
     const ifMatch = line.match(/^if\s+(.+?)\s*:/)
     if (ifMatch) {
       const condition = ifMatch[1]
-      const blockStart = body.indexOf(lines[i]) + lines[i].length
+      const blockStart = lineStarts[i] + lines[i].length
       const ifBody = extractPythonBlock(body, blockStart)
-      const ifBodyOffset = baseLineOffset + i + 1
+      const ifBodyFirstLine = blockFirstLine(i)
+      const ifBodyOffset = baseLineOffset + ifBodyFirstLine
       const thenNodes = extractNodes(ifBody, contextNames, helpers, visited, source, ifBodyOffset)
 
       if (thenNodes.length > 0) {
@@ -212,8 +228,8 @@ function extractNodes(
         })
         nodes.push(...thenNodes)
 
-        const ifBodyLines = ifBody.split('\n').length
-        i += ifBodyLines
+        // Land on the last body line; the for loop's i++ moves past it.
+        i = ifBodyFirstLine + ifBody.split('\n').length - 1
         continue
       }
     }

@@ -223,7 +223,8 @@ function extractNodes(
       const blockStartIdx = body.indexOf(lines[i]) + lines[i].length
       const braceIdx = body.indexOf('{', blockStartIdx - lines[i].length) + 1
       const ifBody = extractJavaBlock(body, braceIdx)
-      const ifBodyOffset = baseLineOffset + i + 1
+      // The body text starts on the header line, so its first line is absLine
+      const ifBodyOffset = absLine
       const thenNodes = extractNodes(ifBody, contextNames, helpers, visited, source, ifBodyOffset)
 
       if (thenNodes.length > 0) {
@@ -240,8 +241,8 @@ function extractNodes(
         })
         nodes.push(...thenNodes)
 
-        const ifBodyLines = ifBody.split('\n').length
-        i += ifBodyLines + 1
+        // Land on the closing brace line; the for loop's i++ moves past it.
+        i += ifBody.split('\n').length - 1
         continue
       }
     }

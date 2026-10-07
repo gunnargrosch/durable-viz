@@ -596,7 +596,8 @@ function extractNodes(
         const indent = line.length - line.trimStart().length
         const braceIdx = lineStarts[i] + indent + braceInLine
         const ifBody = extractBlock(body, bodyMask, braceIdx)
-        const thenNodes = extractNodes(ifBody, contextNames, helpers, visited, source, absLine + 1, alias)
+        // The body text starts on the header line, so its first line is absLine
+        const thenNodes = extractNodes(ifBody, contextNames, helpers, visited, source, absLine, alias)
 
         if (thenNodes.length > 0) {
           const bodyLines = ifBody.trim().split('\n')
@@ -613,7 +614,8 @@ function extractNodes(
             sourceLine: absLine,
           })
           nodes.push(...thenNodes)
-          i += ifBody.split('\n').length
+          // Land on the closing brace line; the for loop's i++ moves past it.
+          i += ifBody.split('\n').length - 1
           continue
         }
       }

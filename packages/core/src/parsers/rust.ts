@@ -277,7 +277,8 @@ function extractNodes(
       if (braceIdx > 0) {
         const condition = ifMatch[1].trim()
         const ifBody = extractBraceBlock(body, braceIdx)
-        const ifBodyOffset = baseLineOffset + i + 1
+        // The body text starts on the header line, so its first line is absLine
+        const ifBodyOffset = absLine
         const thenNodes = extractNodes(ifBody, contextNames, source, ifBodyOffset)
 
         if (thenNodes.length > 0) {
@@ -292,8 +293,8 @@ function extractNodes(
             sourceLine: absLine,
           })
           nodes.push(...thenNodes)
-          const ifBodyLines = ifBody.split('\n').length
-          i += ifBodyLines + 1
+          // Land on the closing brace line; the for loop's i++ moves past it.
+          i += ifBody.split('\n').length - 1
           continue
         }
       }

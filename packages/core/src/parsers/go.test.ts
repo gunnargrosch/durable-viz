@@ -226,4 +226,10 @@ describe('GoParser', () => {
     const graph = parseFile(resolve(examplesDir, 'order_workflow.go'))
     assert.equal(graph.name, 'order_workflow')
   })
+
+  it('should not skip the statement that directly follows an if block', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'go_if_then_step.go'))
+
+    assert.deepEqual(graph.nodes.map((n) => n.label), ['Start', 'event == "vip"', 'vip-perk', 'charge', 'End'])
+  })
 })
