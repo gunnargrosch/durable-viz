@@ -189,4 +189,62 @@ describe('JavaParser', () => {
     const kinds = graph.nodes.map((n) => n.kind)
     assert.ok(kinds.includes('step'))
   })
+
+  describe('loops', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'Loops.java'))
+    const loops = graph.nodes.filter((n) => n.kind === 'loop')
+
+    it('should emit a loop node for for, enhanced for, while and do-while loops', () => {
+      assert.deepEqual(loops.map((n) => n.loopHeader), [
+        'Order order : input.getOrders()',
+        'int attempt = 0; attempt < 3; attempt++',
+        'String region : regions(input.getRegions())',
+        '!isDone()',
+        'hasMore(input)',
+      ])
+    })
+
+    it('should not emit a loop node when the body has no durable calls', () => {
+      assert.ok(!graph.nodes.some((n) => n.loopHeader?.includes('ignored')))
+    })
+
+    it('should include a nested condition, its branch and the step after it in the body count', () => {
+      const orderLoop = loops[0]
+      const index = graph.nodes.indexOf(orderLoop)
+      const body = graph.nodes.slice(index + 1, index + 1 + (orderLoop.bodyCount ?? 0))
+
+      assert.deepEqual(body.map((n) => n.label), ['validate', 'order.isVip()', 'vip-perk', 'charge'])
+    })
+
+    it('should keep a header that contains a call intact', () => {
+      assert.equal(loops[2].bodyCount, 1)
+      assert.equal(loops[2].label, 'loop: String region : regions(input.getRegions())')
+    })
+
+    it('should detect literal iteration counts', () => {
+      assert.equal(loops[1].iterations, 3)
+      assert.equal(loops[0].iterations, undefined)
+    })
+
+    it('should report source lines for the loop and the steps inside it', () => {
+      const lines = Object.fromEntries(graph.nodes.map((n) => [n.label, n.sourceLine]))
+
+      assert.equal(loops[0].sourceLine, 9)
+      assert.equal(lines['validate'], 10)
+      assert.equal(lines['vip-perk'], 12)
+      assert.equal(lines['charge'], 14)
+    })
+
+    it('should keep steps after the loops', () => {
+      const steps = graph.nodes.filter((n) => n.kind === 'step').map((n) => n.label)
+      assert.equal(steps[steps.length - 1], 'finish')
+    })
+
+    it('should connect each loop with a back-edge and a done edge', () => {
+      for (const loop of loops) {
+        assert.ok(graph.edges.some((e) => e.to === loop.id && e.style === 'back'))
+        assert.equal(graph.edges.filter((e) => e.from === loop.id && e.label === 'done').length, 1)
+      }
+    })
+  })
 })

@@ -227,6 +227,76 @@ describe('GoParser', () => {
     assert.equal(graph.name, 'order_workflow')
   })
 
+  describe('loops', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'go_loops.go'))
+    const loops = graph.nodes.filter((n) => n.kind === 'loop')
+
+    it('should emit a loop node for each loop that wraps durable calls', () => {
+      assert.deepEqual(loops.map((n) => n.loopHeader), [
+        '_, order := range event.Orders',
+        'attempt := 0; attempt < 3; attempt++',
+        'range 2',
+        '_, region := range []string{"us", "eu"}',
+        '',
+      ])
+    })
+
+    it('should not emit a loop node when the body has no durable calls', () => {
+      assert.ok(!graph.nodes.some((n) => n.loopHeader?.includes('ignored')))
+    })
+
+    it('should include a nested condition and its branch in the body count', () => {
+      const orderLoop = loops[0]
+      const index = graph.nodes.indexOf(orderLoop)
+      const body = graph.nodes.slice(index + 1, index + 1 + (orderLoop.bodyCount ?? 0))
+
+      assert.deepEqual(body.map((n) => n.label), ['validate', 'order == "vip"', 'vip-perk', 'charge'])
+    })
+
+    it('should detect literal iteration counts', () => {
+      assert.equal(loops[1].iterations, 3)
+      assert.equal(loops[2].iterations, 2)
+      assert.equal(loops[0].iterations, undefined)
+    })
+
+    it('should use the trailing brace so composite literals in the header do not cut it short', () => {
+      const regionLoop = loops[3]
+      const index = graph.nodes.indexOf(regionLoop)
+
+      assert.equal(regionLoop.bodyCount, 1)
+      assert.equal(graph.nodes[index + 1].label, 'per-region')
+    })
+
+    it('should label a bare for loop as a plain loop', () => {
+      assert.equal(loops[4].label, 'loop')
+    })
+
+    it('should keep steps after the loops in order', () => {
+      const labels = graph.nodes.filter((n) => n.kind === 'step').map((n) => n.label)
+      assert.equal(labels[labels.length - 1], 'finish')
+    })
+
+    it('should connect each loop with a back-edge and a done edge', () => {
+      for (const loop of loops) {
+        assert.ok(graph.edges.some((e) => e.to === loop.id && e.style === 'back'))
+        assert.equal(graph.edges.filter((e) => e.from === loop.id && e.label === 'done').length, 1)
+      }
+    })
+
+    it('should report the source line of the loop and of the steps inside it', () => {
+      const orderLoop = loops[0]
+      const validate = graph.nodes.find((n) => n.label === 'validate')!
+
+      const perk = graph.nodes.find((n) => n.label === 'vip-perk')!
+      const charge = graph.nodes.find((n) => n.label === 'charge')!
+
+      assert.equal(orderLoop.sourceLine, 18)
+      assert.equal(validate.sourceLine, 19)
+      assert.equal(perk.sourceLine, 23)
+      assert.equal(charge.sourceLine, 27)
+    })
+  })
+
   it('should not skip the statement that directly follows an if block', () => {
     const graph = parser.parseFile(resolve(fixturesDir, 'go_if_then_step.go'))
 

@@ -199,4 +199,63 @@ describe('CSharpParser', () => {
     assert.ok(invoke, 'Should find invoke node')
     assert.equal(invoke.tenantId, 'tenant-abc-123')
   })
+
+  describe('loops', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'Loops.cs'))
+    const loops = graph.nodes.filter((n) => n.kind === 'loop')
+
+    it('should emit a loop node for foreach, for, while and do-while loops', () => {
+      assert.deepEqual(loops.map((n) => n.loopHeader), [
+        'var order in input.Orders',
+        'int attempt = 0; attempt < 3; attempt++',
+        'var region in GetRegions(input.Id)',
+        '!IsDone()',
+        'HasMore(input)',
+      ])
+    })
+
+    it('should not emit a loop node when the body has no durable calls', () => {
+      assert.ok(!graph.nodes.some((n) => n.loopHeader?.includes('ignored')))
+    })
+
+    it('should include a nested condition, its branch and the step after it in the body count', () => {
+      const orderLoop = loops[0]
+      const index = graph.nodes.indexOf(orderLoop)
+      const body = graph.nodes.slice(index + 1, index + 1 + (orderLoop.bodyCount ?? 0))
+
+      assert.deepEqual(body.map((n) => n.label), ['validate', 'order.IsVip', 'vip-perk', 'charge'])
+    })
+
+    it('should support a same-line brace and detect the literal count', () => {
+      assert.equal(loops[1].iterations, 3)
+      assert.equal(loops[1].bodyCount, 1)
+      assert.equal(loops[0].iterations, undefined)
+    })
+
+    it('should keep a header that contains a call intact', () => {
+      assert.equal(loops[2].label, 'loop: var region in GetRegions(input.Id)')
+      assert.equal(loops[2].bodyCount, 1)
+    })
+
+    it('should report source lines for the loop and the steps inside it', () => {
+      const lines = Object.fromEntries(graph.nodes.map((n) => [n.label, n.sourceLine]))
+
+      assert.equal(loops[0].sourceLine, 16)
+      assert.equal(lines['validate'], 18)
+      assert.equal(lines['vip-perk'], 21)
+      assert.equal(lines['charge'], 23)
+    })
+
+    it('should keep steps after the loops', () => {
+      const steps = graph.nodes.filter((n) => n.kind === 'step').map((n) => n.label)
+      assert.equal(steps[steps.length - 1], 'finish')
+    })
+
+    it('should connect each loop with a back-edge and a done edge', () => {
+      for (const loop of loops) {
+        assert.ok(graph.edges.some((e) => e.to === loop.id && e.style === 'back'))
+        assert.equal(graph.edges.filter((e) => e.from === loop.id && e.label === 'done').length, 1)
+      }
+    })
+  })
 })

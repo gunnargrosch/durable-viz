@@ -18,7 +18,8 @@
 
 import { readFileSync } from 'node:fs'
 import type { WorkflowNode, WorkflowBranch, WorkflowGraph } from '../graph.js'
-import { buildEdges } from '../graph.js'
+import { buildEdges, loopLabel } from '../graph.js'
+import { parseCStyleLoopHead, cStyleLoopIterations, doWhileCondition } from './c-style-loops.js'
 import type { Parser, ParseOptions } from '../parser.js'
 import { basename } from 'node:path'
 
@@ -209,6 +210,14 @@ function extractNodes(
   const nodes: WorkflowNode[] = []
   const lines = body.split('\n')
 
+  // Character offset of each line within `body`, for locating braces.
+  const lineStarts: number[] = []
+  let offset = 0
+  for (const rawLine of lines) {
+    lineStarts.push(offset)
+    offset += rawLine.length + 1
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
     const absLine = baseLineOffset + i
@@ -243,6 +252,34 @@ function extractNodes(
 
         // Land on the closing brace line; the for loop's i++ moves past it.
         i += ifBody.split('\n').length - 1
+        continue
+      }
+    }
+
+    // for / foreach / while / do-while → loop node followed by the loop body
+    const loopHead = parseCStyleLoopHead(line)
+    if (loopHead && loopHead.rest === '{') {
+      const braceIdx = lineStarts[i] + lines[i].replace(/\s*\/\/.*$/, '').trimEnd().length
+      const loopBody = extractJavaBlock(body, braceIdx)
+      const bodyNodes = extractNodes(loopBody, contextNames, helpers, visited, source, absLine)
+
+      if (bodyNodes.length > 0) {
+        const header = loopHead.keyword === 'do'
+          ? doWhileCondition(body, braceIdx + loopBody.length)
+          : loopHead.header
+        const iterations = cStyleLoopIterations(loopHead)
+        nodes.push({
+          id: nextId('loop'),
+          kind: 'loop',
+          label: loopLabel(header, iterations),
+          loopHeader: header,
+          bodyCount: bodyNodes.length,
+          iterations,
+          sourceLine: absLine,
+        })
+        nodes.push(...bodyNodes)
+        // Land on the closing brace line; the for loop's i++ moves past it.
+        i += loopBody.split('\n').length - 1
         continue
       }
     }

@@ -15,7 +15,7 @@
 
 import { readFileSync } from 'node:fs'
 import type { WorkflowNode, WorkflowBranch, WorkflowGraph } from '../graph.js'
-import { buildEdges } from '../graph.js'
+import { buildEdges, loopLabel } from '../graph.js'
 import type { Parser, ParseOptions } from '../parser.js'
 import { basename } from 'node:path'
 
@@ -255,6 +255,14 @@ function extractRustBranches(lines: string[], startLine: number): WorkflowBranch
   return branches
 }
 
+/** Count iterations for `for _ in 0..3` / `0..=3` ranges with literal bounds. */
+function rustLoopIterations(header: string): number | undefined {
+  const range = header.match(/\bin\s+(\d+)\s*\.\.(=?)\s*(\d+)$/)
+  if (!range) return undefined
+  const count = Number(range[3]) - Number(range[1]) + (range[2] ? 1 : 0)
+  return count > 0 ? count : undefined
+}
+
 function extractNodes(
   body: string,
   contextNames: string[],
@@ -263,6 +271,14 @@ function extractNodes(
 ): WorkflowNode[] {
   const nodes: WorkflowNode[] = []
   const lines = body.split('\n')
+
+  // Character offset of each line within `body`, for locating braces.
+  const lineStarts: number[] = []
+  let offset = 0
+  for (const rawLine of lines) {
+    lineStarts.push(offset)
+    offset += rawLine.length + 1
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
@@ -297,6 +313,33 @@ function extractNodes(
           i += ifBody.split('\n').length - 1
           continue
         }
+      }
+    }
+
+    // for / while / loop → loop node followed by the loop body. The block opens
+    // at the trailing brace; labeled loops (`'outer: for ...`) are supported.
+    const loopMatch = line.replace(/\s*\/\/.*$/, '').match(/^(?:'\w+:\s*)?(for|while|loop)\b\s*(.*?)\s*\{$/)
+    if (loopMatch) {
+      const header = loopMatch[1] === 'loop' ? '' : loopMatch[2].trim()
+      const braceIdx = lineStarts[i] + lines[i].replace(/\s*\/\/.*$/, '').trimEnd().length
+      const loopBody = extractBraceBlock(body, braceIdx)
+      const bodyNodes = extractNodes(loopBody, contextNames, source, absLine)
+
+      if (bodyNodes.length > 0) {
+        const iterations = loopMatch[1] === 'for' ? rustLoopIterations(header) : undefined
+        nodes.push({
+          id: nextId('loop'),
+          kind: 'loop',
+          label: loopLabel(header, iterations),
+          loopHeader: header,
+          bodyCount: bodyNodes.length,
+          iterations,
+          sourceLine: absLine,
+        })
+        nodes.push(...bodyNodes)
+        // Land on the closing brace line; the for loop's i++ moves past it.
+        i += loopBody.split('\n').length - 1
+        continue
       }
     }
 
