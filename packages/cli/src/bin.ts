@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { writeFileSync, readFileSync } from 'node:fs'
 import { exec, execSync } from 'node:child_process'
 import { parseFile, renderMermaid } from '@durable-viz/core'
+import { version } from '../package.json'
 
 function isWSL(): boolean {
   try {
@@ -381,7 +382,7 @@ ${mermaid}
 const program = new Command()
   .name('durable-viz')
   .description('Visualize AWS Lambda Durable Functions workflows')
-  .version('0.8.0')
+  .version(version)
   .argument('<file>', 'Path to a file containing a durable function handler')
   .option('-d, --direction <dir>', 'Graph direction: TD (top-down) or LR (left-right)', 'TD')
   .option('-n, --name <name>', 'Override the workflow name')

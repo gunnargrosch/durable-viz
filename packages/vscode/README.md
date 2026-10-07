@@ -23,6 +23,7 @@ Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust*
 - **Interactive diagram.** See your durable function as a flowchart in a side panel.
 - **Scroll zoom** and **click-drag pan**.
 - **Click-to-navigate** to source lines.
+- **Loops.** `for`, `while`, and `foreach` loops that wrap durable calls show the loop body in a dashed box with a `next` edge back to the loop.
 - **Auto-refresh** on file save.
 - **Direction toggle** (TD/LR), **PNG export**, **source view** (Mermaid/JSON).
 

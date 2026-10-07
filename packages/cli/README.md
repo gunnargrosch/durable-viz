@@ -85,6 +85,7 @@ Go also supports `durable.All()`, `durable.AllSettled()`, `durable.Any()`, `dura
 | Parallel / Map | Hexagon | Purple |
 | Wait / Callback | Circle | Red |
 | Condition | Diamond | Indigo |
+| Loop | Rounded rectangle, body in a dashed box | Olive |
 | Child Context / With Retry | Subroutine | Teal |
 
 ## Build Mode

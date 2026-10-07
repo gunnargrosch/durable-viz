@@ -80,25 +80,32 @@ Try the included examples:
 # TypeScript
 npx durable-viz examples/order-workflow.ts --open
 npx durable-viz examples/order-workflow-config.ts --open
+npx durable-viz examples/order-batch-loop.ts --open
 
 # Python
 npx durable-viz examples/order_processor.py --open
 npx durable-viz examples/order_processor_with_retry.py --open
+npx durable-viz examples/order_batch_loop.py --open
 
 # Java
 npx durable-viz examples/OrderProcessor.java --open
 npx durable-viz examples/OrderProcessorFutures.java --open
+npx durable-viz examples/OrderBatchLoop.java --open
 
 # C# (.NET)
 npx durable-viz examples/OrderWorkflow.cs --open
 npx durable-viz examples/OrderProcessor.cs --open
+npx durable-viz examples/OrderBatchLoop.cs --open
 
 # Rust
 npx durable-viz examples/order_workflow.rs --open
+npx durable-viz examples/order_workflow_config.rs --open
+npx durable-viz examples/order_batch_loop.rs --open
 
 # Go
 npx durable-viz examples/order_workflow.go --open
 npx durable-viz examples/order_workflow_config.go --open
+npx durable-viz examples/order_batch_loop.go --open
 ```
 
 ## VS Code Extension
@@ -276,6 +283,7 @@ Each primitive type has a distinct shape and color in the diagram:
 | Parallel / Map / Promise Combinators | Hexagon | Purple |
 | Wait / Callback | Circle | Red |
 | Condition | Diamond | Indigo |
+| Loop | Rounded rectangle, body in a dashed box | Olive |
 | Child Context / With Retry | Subroutine | Teal |
 
 Config-level details (nesting type, completion rules, step semantics, tenant isolation) are shown as annotations below the node label.
@@ -317,6 +325,12 @@ Regex-based parser. Finds `durable.Start(handler)` (also `durable.Wrap`) entry p
 
 All parsers detect `if` statements that wrap durable calls and represent them as condition (diamond) nodes in the graph. When the `if` block ends with a `return`, the "yes" branch connects to End instead of falling through.
 
+### Loops
+
+All parsers detect loops that wrap durable calls: `for`, `for...of`/`for...in`, `while`, and `do...while` in TypeScript, Java, and C# (plus `foreach`), `for`, `while`, and `async for` in Python, `for`, `while`, `while let`, and `loop` (including labeled loops) in Rust, and every `for` form in Go (`for {`, `for cond {`, three-clause, and `range`). A loop becomes a loop node with its body in a dashed box. A dashed `next` edge returns from the last body operation to the loop node, and a `done` edge leaves it. Conditions, parallel nodes, and other loops inside the body work as usual.
+
+When the iteration count is a plain literal (`for (let i = 0; i < 3; i++)`, `range(3)`, `0..3`, `for range 3`) the label shows it, for example `loop: attempt < 3 x3`. Loops without durable calls in their body are left out, the same as `if` statements.
+
 ## Examples
 
 The `examples/` directory contains sample handlers for each language:
@@ -325,15 +339,22 @@ The `examples/` directory contains sample handlers for each language:
 | --- | --- | --- |
 | `order-workflow.ts` | TypeScript | step, parallel, invoke, waitForCallback, condition |
 | `order-workflow-config.ts` | TypeScript | step, parallel, map, invoke, runInChildContext, withRetry, config features |
+| `order-batch-loop.ts` | TypeScript | step, wait, waitForCallback, condition, loop |
 | `order_processor.py` | Python | step, wait, create_callback, invoke, condition |
 | `order_processor_with_retry.py` | Python | step, parallel, map, invoke, withRetry, config features |
+| `order_batch_loop.py` | Python | step, wait, waitForCallback, condition, loop |
 | `OrderProcessor.java` | Java | step, parallel, wait, invoke, waitForCallback, condition |
 | `OrderProcessorFutures.java` | Java | step, parallel, map, invoke, runInChildContext, withRetry, allOf, anyOf, config features |
+| `OrderBatchLoop.java` | Java | step, wait, waitForCallback, condition, loop |
 | `OrderWorkflow.cs` | C# | step, parallel, wait, waitForCallback, condition |
 | `OrderProcessor.cs` | C# | step, parallel, wait, invoke, waitForCallback, condition |
+| `OrderBatchLoop.cs` | C# | step, wait, waitForCallback, condition, loop |
 | `order_workflow.rs` | Rust | step, parallel, wait, waitForCallback, condition, maxConcurrency |
+| `order_workflow_config.rs` | Rust | step, invoke, map, runInChildContext, withRetry, waitForCondition, createCallback, race, config features |
+| `order_batch_loop.rs` | Rust | step, wait, waitForCallback, condition, loop |
 | `order_workflow.go` | Go | step, parallel, wait, waitForCallback, condition |
 | `order_workflow_config.go` | Go | step, invoke, map, runInChildContext, withRetry, waitForCondition, combinators, config features |
+| `order_batch_loop.go` | Go | step, wait, waitForCallback, condition, loop |
 
 ```shell
 npx durable-viz examples/order-workflow.ts --open
@@ -354,10 +375,11 @@ durable-viz/
           csharp.ts               # C# parser (regex)
           rust.ts                 # Rust parser (regex)
           go.ts                   # Go parser (regex)
+          c-style-loops.ts        # Loop header parsing shared by Java and C#
         graph.ts                  # WorkflowGraph model + edge builder
         renderers/
           mermaid.ts              # Mermaid flowchart renderer
-          codegen.ts              # Handler code generation (TS/Python/Java/C#/Rust)
+          codegen.ts              # Handler code generation (TS/Python/Java/C#/Rust/Go)
         index.ts                  # Public API
     cli/                          # npx CLI
       src/
@@ -386,6 +408,7 @@ Build Mode:  [canvas] → cyToWorkflowGraph() → WorkflowGraph → generateCode
 - **Same-file only.** Function-reference following resolves functions defined in the same file. Imported helpers from other files are not followed.
 - **Static analysis.** The parser sees all possible paths, not a specific execution. Dynamic parallel branches (from `.map()`) show all registered targets, even if a given execution only uses a subset.
 - **Mermaid rendering.** Arrow routing for fan-in (multiple edges converging on one node) is controlled by Mermaid's layout engine. Complex workflows with many parallel branches may have overlapping edges.
+- **Loops show structure, not control flow.** `break`, `continue`, and `else` clauses are not drawn. Loop bodies written without braces, one-line bodies (`for x in y: step()`), and iteration through callbacks (`forEach`, `.map`, `for_each`, LINQ) are not detected as loops.
 - **Python/Java/C# parsers are regex-based.** They handle standard patterns well but may miss unusual formatting (e.g., method calls split across many lines with comments between arguments).
 
 ## Contributing
