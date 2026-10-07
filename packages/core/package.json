@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc",
     "lint": "eslint src",
-    "test": "node --test dist/**/*.test.js"
+    "test": "node --test dist/*.test.js dist/*/*.test.js"
   },
   "dependencies": {
     "ts-morph": "^25.0.0"
