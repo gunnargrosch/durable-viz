@@ -45,6 +45,7 @@ def handler(event: dict, context: DurableContext) -> dict:
         name="validate_order",
         config=StepConfig(
             step_semantics=StepSemantics.AT_MOST_ONCE_PER_RETRY,
+            sub_type="OrderValidation",
         ),
     )
 

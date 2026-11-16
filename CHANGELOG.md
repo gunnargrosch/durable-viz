@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.0] - 2026-11-16
+
+### Added
+
+- **Go SDK GA (v1.0.0) support.** Updated the Go examples and code generation for the GA SDK. Go code generation now emits a required `WaitStrategy` for `WaitForCondition`; a nil strategy is rejected at the call in v1.0.
+- **`ParallelMixed` support.** Go `durable.ParallelMixed()` with `NewTypedBranch` branches and Rust `ctx.parallel_mixed()` with `BranchSet` branches render as parallel nodes with their named branches. The C# incremental `ctx.CreateParallel().Branch<T>()` API is also detected.
+- **Custom operation subtypes.** TypeScript `subType`, Python `sub_type`, C# `SubType`, Rust `.sub_type(...)`, and Go `WithStepSubType`/`WithCallbackSubType`/`WithChildSubType` are shown as annotations on the diagram. Go code generation emits the subtype options, and the new Go and Rust examples exercise them.
+- **Rust SDK 0.2 examples.** Updated the examples for the single `wait_for_callback` output type parameter, the `with_retry` attempt argument, `durable::init_default_subscriber`, and subtype labels.
+- New examples: `order_parallel_mixed.go` and `order_parallel_mixed.rs`.
+
+### Changed
+
+- Clicking the Start or End node now navigates to the handler declaration and the end of the handler, the same way as the other nodes.
+- Updated the repo, CLI, and VS Code READMEs with the covered SDK versions, new examples, `ParallelMixed`, custom subtypes, and Start/End navigation.
+- Updated the Java, Python, and .NET examples for the current SDK callback signatures and .NET `SubType` config. All examples now parse with the CLI.
+
+### Fixed
+
+- Rust and Go parser comments and documentation now describe the supported SDK versions accurately.
+
 ## [0.9.0] - 2026-10-07
 
 ### Added

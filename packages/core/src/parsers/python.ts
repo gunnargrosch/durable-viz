@@ -305,11 +305,18 @@ function extractNodes(
         if (info.kind === 'runInChildContext') {
           const config = extractPythonConfig(lines, i)
           if (config.nestingType) node.nestingType = config.nestingType
+          if (config.subType) node.subType = config.subType
         }
 
         if (info.kind === 'step') {
           const config = extractPythonConfig(lines, i)
           if (config.stepSemantics) node.stepSemantics = config.stepSemantics
+          if (config.subType) node.subType = config.subType
+        }
+
+        if (info.kind === 'createCallback' || info.kind === 'waitForCallback') {
+          const config = extractPythonConfig(lines, i)
+          if (config.subType) node.subType = config.subType
         }
 
         nodes.push(node)
@@ -398,6 +405,7 @@ interface PythonConfigFlags {
   completionConfig?: string
   stepSemantics?: string
   tenantId?: string
+  subType?: string
   maxConcurrency?: number
 }
 
@@ -416,6 +424,9 @@ function extractPythonConfig(lines: string[], lineIdx: number): PythonConfigFlag
 
   const tenant = searchText.match(/["']?\s*tenant_id\s*["']?\s*[=:]\s*["']([^"']+)["']/)
   if (tenant) flags.tenantId = tenant[1]
+
+  const subType = searchText.match(/["']?\s*sub_type\s*["']?\s*[=:]\s*["']([^"']+)["']/)
+  if (subType) flags.subType = subType[1]
 
   const concurrency = searchText.match(/["']?\s*max_concurrency\s*["']?\s*[=:]\s*(\d+)/)
   if (concurrency) flags.maxConcurrency = Number(concurrency[1])
@@ -480,8 +491,18 @@ export class PythonParser implements Parser {
     const handlerOffset = lineOfSubstring(source, handlerBody)
     const workflowNodes = extractNodes(handlerBody, contextNames, helpers, new Set(), source, handlerOffset)
 
-    const startNode: WorkflowNode = { id: 'node_start', kind: 'start', label: 'Start' }
-    const endNode: WorkflowNode = { id: 'node_end', kind: 'end', label: 'End' }
+    const startNode: WorkflowNode = {
+      id: 'node_start',
+      kind: 'start',
+      label: 'Start',
+      sourceLine: handlerOffset,
+    }
+    const endNode: WorkflowNode = {
+      id: 'node_end',
+      kind: 'end',
+      label: 'End',
+      sourceLine: handlerOffset + handlerBody.split('\n').length - 1,
+    }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)
 

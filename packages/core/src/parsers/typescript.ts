@@ -598,6 +598,7 @@ function extractFromBlock(
           label: name ?? 'step',
           retryStrategy: getRetryStrategy(call),
           stepSemantics: semantics?.includes('AtMostOnce') ? 'AtMostOncePerRetry' : undefined,
+          subType: getConfigProp(call, 'subType'),
           sourceLine: lineOf(call),
         })
       } else if (isDurableCall(call, 'parallel', contextNames)) {
@@ -654,6 +655,7 @@ function extractFromBlock(
           kind: 'createCallback',
           label: name ?? 'createCallback',
           timeout: getTimeoutInfo(call),
+          subType: getConfigProp(call, 'subType'),
           sourceLine: lineOf(call),
         })
       } else if (isDurableCall(call, 'runInChildContext', contextNames)) {
@@ -664,6 +666,7 @@ function extractFromBlock(
           kind: 'runInChildContext',
           label: name ?? 'childContext',
           nestingType: getNestingType(call),
+          subType: getConfigProp(call, 'subType'),
           sourceLine: lineOf(call),
         })
       } else if (isDurableCall(call, 'map', contextNames)) {
@@ -827,8 +830,18 @@ export class TypeScriptParser implements Parser {
       sourceFile,
     )
 
-    const startNode: WorkflowNode = { id: 'node_start', kind: 'start', label: 'Start' }
-    const endNode: WorkflowNode = { id: 'node_end', kind: 'end', label: 'End' }
+    const startNode: WorkflowNode = {
+      id: 'node_start',
+      kind: 'start',
+      label: 'Start',
+      sourceLine: handlerArg.getStartLineNumber(),
+    }
+    const endNode: WorkflowNode = {
+      id: 'node_end',
+      kind: 'end',
+      label: 'End',
+      sourceLine: body.getEndLineNumber(),
+    }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)
 

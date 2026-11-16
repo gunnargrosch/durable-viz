@@ -30,6 +30,7 @@ async fn handler(
             }
         })
         .semantics(durable::StepSemantics::AtMostOncePerRetry)
+        .sub_type(durable::OperationSubType::new("ChargeCard").unwrap())
         .await?;
 
     // A map fan-out tolerating a single failure, bounded to two concurrent items.
@@ -64,11 +65,12 @@ async fn handler(
         })
         .name("child-branch")
         .nesting(NestingMode::Flat)
+        .sub_type(durable::OperationSubType::new("Settlement").unwrap())
         .await?;
 
     // A retry block wrapping a single step.
     let retried = ctx
-        .with_retry(|_ctx| async move { Ok("done".to_owned()) })
+        .with_retry(|_ctx, _attempt| async move { Ok("done".to_owned()) })
         .name("retry-block")
         .retry_strategy(|_err, _attempt| durable::RetryDecision::Stop)
         .await?;
@@ -90,6 +92,7 @@ async fn handler(
     let cb = ctx
         .create_callback::<String>()
         .name("manager-approval")
+        .sub_type(durable::OperationSubType::new("ManagerApproval").unwrap())
         .await?;
     let approval = cb.result().await?;
 
@@ -118,6 +121,6 @@ async fn handler(
 
 #[tokio::main]
 async fn main() -> Result<(), lambda_runtime::Error> {
-    lambda_runtime::tracing::init_default_subscriber();
+    durable::init_default_subscriber()?;
     durable::run(handler).await
 }

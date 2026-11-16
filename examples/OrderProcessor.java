@@ -38,7 +38,7 @@ public class OrderProcessor extends DurableHandler<Order, OrderResult> {
         // Step 5: High-value orders need manager approval
         if (order.getTotal() > 10000) {
             var approval = ctx.waitForCallback("manager-approval",
-                callbackId -> notifyManager(callbackId, order),
+                (callbackId, stepCtx) -> notifyManager(callbackId, order),
                 CallbackConfig.builder().timeout(Duration.ofHours(24)).build());
 
             if (!approval.isApproved()) {

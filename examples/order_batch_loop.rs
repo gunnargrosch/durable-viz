@@ -6,7 +6,7 @@ use aws_durable_execution_sdk as durable;
 
 #[tokio::main]
 async fn main() -> Result<(), lambda_runtime::Error> {
-    lambda_runtime::tracing::init_default_subscriber();
+    durable::init_default_subscriber()?;
     durable::run(|batch: Batch, ctx: durable::DurableContext| async move {
         ctx.step(|_| async { load_batch(&batch).await })
             .name("load-batch")
@@ -19,7 +19,7 @@ async fn main() -> Result<(), lambda_runtime::Error> {
                 .await?;
 
             if order.total > 10000 {
-                ctx.wait_for_callback(|callback_id| async move { notify_manager(callback_id).await })
+                ctx.wait_for_callback(|_step_ctx, callback_id| async move { notify_manager(callback_id).await })
                     .name("manager-approval")
                     .await?;
             }

@@ -30,7 +30,7 @@ func handler(ctx durable.Context, event OrderEvent) (any, error) {
 	// Charge payment with retry and at-most-once semantics.
 	if _, err := durable.Step(ctx, "charge-payment", func(sc durable.StepContext) (string, error) {
 		return "payment-1", nil
-	}, durable.WithRetry(durable.ExponentialBackoff()), durable.WithSemantics(durable.AtMostOncePerRetry)); err != nil {
+	}, durable.WithRetry(durable.ExponentialBackoff()), durable.WithSemantics(durable.AtMostOncePerRetry), durable.WithStepSubType("ChargeCard")); err != nil {
 		return nil, err
 	}
 
@@ -57,7 +57,7 @@ func handler(ctx durable.Context, event OrderEvent) (any, error) {
 		return durable.Step(child, "close-ledger", func(sc durable.StepContext) (string, error) {
 			return "closed", nil
 		})
-	}, durable.WithChildVirtual()); err != nil {
+	}, durable.WithChildVirtual(), durable.WithChildSubType("Settlement")); err != nil {
 		return nil, err
 	}
 
@@ -73,10 +73,20 @@ func handler(ctx durable.Context, event OrderEvent) (any, error) {
 		return nil, err
 	}
 
-	// Poll until the shipment is marked ready.
+	// Poll until the shipment is marked ready. The SDK requires a wait
+	// strategy; the zero value of each WaitConfig field selects its default.
 	if _, err := durable.WaitForCondition(ctx, "await-shipment", func(sc durable.StepContext, state int) (int, error) {
 		return state + 1, nil
-	}, durable.ConditionConfig[int]{}); err != nil {
+	}, durable.ConditionConfig[int]{
+		InitialState: 0,
+		WaitStrategy: durable.MustNewWaitStrategy(durable.WaitConfig[int]{
+			MaxAttempts: 10,
+			InitialDelay: 5 * time.Second,
+			ShouldContinue: func(state int) bool {
+				return state < 3
+			},
+		}),
+	}); err != nil {
 		return nil, err
 	}
 

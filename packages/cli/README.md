@@ -5,7 +5,7 @@
 
 Static analysis for [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows. Parses handler code and renders an interactive flowchart — no deployment or execution required.
 
-Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes.
+Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes. SDK versions covered: JS 3.0, Python 3.0, Java 3.x, .NET 2.x, Rust 0.2, and Go 1.0 (GA).
 
 ## Quick Start
 
@@ -71,9 +71,11 @@ TypeScript also supports `context.promise.all()`, `context.promise.any()`, `cont
 
 Java also supports `DurableFuture.allOf(futures...)` and `DurableFuture.anyOf(futures...)`.
 
-Rust also supports the concurrency combinators `ctx.join_all()`, `ctx.try_join_all()`, `ctx.select_ok()`, and `ctx.race()`, plus the `.future()` and `.spawn()` builder modifiers.
+Rust also supports `ctx.parallel_mixed()` with its `BranchSet` branches, the concurrency combinators `ctx.join_all()`, `ctx.try_join_all()`, `ctx.select_ok()`, and `ctx.race()`, plus the `.future()` and `.spawn()` builder modifiers.
 
-Go also supports `durable.All()`, `durable.AllSettled()`, `durable.Any()`, `durable.Race()`, `durable.Join()`, and `durable.Select()`, the concurrent child context `durable.Go()`, and the async variants (`StepAsync`, `InvokeAsync`, `WaitAsync`, `RunInChildContextAsync`).
+Go (GA v1.0) also supports `durable.ParallelMixed()` with its `NewTypedBranch` branches, `durable.All()`, `durable.AllSettled()`, `durable.Any()`, `durable.Race()`, `durable.Join()`, and `durable.Select()`, the concurrent child context `durable.Go()`, and the async variants (`StepAsync`, `InvokeAsync`, `WaitAsync`, `RunInChildContextAsync`).
+
+TypeScript, Python, C#, Rust, and Go custom operation subtypes (`subType` / `sub_type` / `SubType` / `WithStepSubType` / `.sub_type(...)`) are shown as annotations on the diagram.
 
 ## Visual Encoding
 

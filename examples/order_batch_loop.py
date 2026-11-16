@@ -4,6 +4,7 @@ Run: npx durable-viz examples/order_batch_loop.py --open
 """
 
 from aws_durable_execution_sdk_python import DurableContext, durable_execution
+from aws_durable_execution_sdk_python.config import Duration
 
 
 @durable_execution
@@ -15,7 +16,10 @@ def handler(event: dict, context: DurableContext) -> dict:
         context.step(validate_order(order), name="validate-order")
 
         if order["total"] > 10000:
-            context.wait_for_callback(notify_manager, name="manager-approval")
+            context.wait_for_callback(
+                lambda callback_id, _ctx: notify_manager(callback_id),
+                name="manager-approval",
+            )
 
         context.step(charge_order(order), name="charge-order")
 

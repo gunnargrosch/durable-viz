@@ -8,7 +8,7 @@ Visualize and build [AWS Lambda Durable Functions](https://docs.aws.amazon.com/l
 - **View mode:** Parse handler code and render an interactive flowchart.
 - **Build mode:** Design workflows from scratch and generate handler boilerplate.
 
-Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes.
+Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes. SDK versions covered: JS 3.0, Python 3.0, Java 3.x, .NET 2.x, Rust 0.2, and Go 1.0 (GA).
 
 ## Install
 
@@ -22,7 +22,8 @@ Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust*
 
 - **Interactive diagram.** See your durable function as a flowchart in a side panel.
 - **Scroll zoom** and **click-drag pan**.
-- **Click-to-navigate** to source lines.
+- **Click-to-navigate** to source lines, including from the Start and End nodes.
+- **SDK coverage.** `ParallelMixed`/incremental parallel branches and custom operation subtypes are shown in the diagram, including Go 1.0 GA.
 - **Loops.** `for`, `while`, and `foreach` loops that wrap durable calls show the loop body in a dashed box with a `next` edge back to the loop.
 - **Auto-refresh** on file save.
 - **Direction toggle** (TD/LR), **PNG export**, **source view** (Mermaid/JSON).

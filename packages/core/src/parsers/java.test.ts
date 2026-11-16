@@ -74,6 +74,12 @@ describe('JavaParser', () => {
 
     const nodesWithLines = graph.nodes.filter((n) => n.sourceLine != null)
     assert.ok(nodesWithLines.length >= 5, `Expected at least 5 nodes with source lines, got ${nodesWithLines.length}`)
+
+    const start = graph.nodes.find((n) => n.kind === 'start')
+    const end = graph.nodes.find((n) => n.kind === 'end')
+    assert.ok(start?.sourceLine, 'Start should have a source line')
+    assert.ok(end?.sourceLine, 'End should have a source line')
+    assert.ok(end!.sourceLine! > start!.sourceLine!, 'End should follow Start')
   })
 
   it('generates valid edges', () => {

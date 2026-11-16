@@ -1,5 +1,5 @@
 /**
- * Rust parser for AWS Lambda Durable Execution SDK (preview).
+ * Rust parser for AWS Lambda Durable Execution SDK 0.2 (preview).
  *
  * Uses regex-based parsing to find `durable::run(handler)` entry points and
  * extract the fluent builder API. The Rust SDK uses snake_case methods on
@@ -40,6 +40,7 @@ const PRIMITIVES: Record<string, PrimitiveInfo> = {
   'step': { kind: 'step', idPrefix: 'step' },
   'invoke': { kind: 'invoke', idPrefix: 'invoke' },
   'parallel': { kind: 'parallel', idPrefix: 'parallel' },
+  'parallel_mixed': { kind: 'parallel', idPrefix: 'parallel' },
   'map': { kind: 'map', idPrefix: 'map' },
   'wait': { kind: 'wait', idPrefix: 'wait' },
   'wait_for_callback': { kind: 'waitForCallback', idPrefix: 'callback' },
@@ -198,6 +199,7 @@ interface RustConfigFlags {
   completionConfig?: string
   stepSemantics?: string
   tenantId?: string
+  subType?: string
   maxConcurrency?: number
   retryStrategy?: string
 }
@@ -225,6 +227,15 @@ function extractRustConfig(chain: string): RustConfigFlags {
   const tenant = chain.match(/\.tenant_id\(\s*"([^"]+)"/)
   if (tenant) flags.tenantId = tenant[1]
 
+  const subTypeLiteral = chain.match(/\.sub_type\(\s*(?:[\w:]+::)?OperationSubType::(?:new|try_from)\(\s*"([^"]+)"/)
+    ?? chain.match(/\.sub_type\(\s*"([^"]+)"\s*\.parse\(\)/)
+  if (subTypeLiteral) {
+    flags.subType = subTypeLiteral[1]
+  } else {
+    const subTypeConst = chain.match(/\.sub_type\(\s*(?:[\w:]+::)?OperationSubType::(\w+)\s*\)/)
+    if (subTypeConst && !['new', 'try_from'].includes(subTypeConst[1])) flags.subType = subTypeConst[1]
+  }
+
   const concurrency = chain.match(/\.max_concurrency\(\s*(\d+)/)
   if (concurrency) flags.maxConcurrency = Number(concurrency[1])
 
@@ -233,21 +244,31 @@ function extractRustConfig(chain: string): RustConfigFlags {
   return flags
 }
 
-/** Extract parallel branch names from `Branch::new("name", ...)`. */
-function extractRustBranches(lines: string[], startLine: number): WorkflowBranch[] {
+/** Extract parallel branch names from `Branch::new("name", ...)` or `BranchSet::add("name", ...)`. */
+function extractRustBranches(lines: string[], startLine: number, includeBranchSet = false): WorkflowBranch[] {
   const branches: WorkflowBranch[] = []
-  const searchText = lines.slice(startLine, startLine + 40).join('\n')
+  const names: string[] = []
 
-  const branchPattern = /Branch::new\s*\(\s*"([^"]+)"/g
-  let match
-  while ((match = branchPattern.exec(searchText)) !== null) {
+  const forwardText = lines.slice(startLine, startLine + 40).join('\n')
+  for (const match of forwardText.matchAll(/Branch::new\s*\(\s*"([^"]+)"/g)) {
+    names.push(match[1])
+  }
+
+  if (includeBranchSet) {
+    const surroundingText = lines.slice(Math.max(0, startLine - 40), startLine + 1).join('\n')
+    for (const match of surroundingText.matchAll(/\.add\s*\(\s*"([^"]+)"/g)) {
+      names.push(match[1])
+    }
+  }
+
+  for (const name of names) {
     branches.push({
-      name: match[1],
+      name,
       dynamic: false,
       nodes: [{
         id: nextId('step'),
         kind: 'step',
-        label: match[1],
+        label: name,
       }],
     })
   }
@@ -373,7 +394,7 @@ function extractNodes(
         }
 
         if (info.kind === 'parallel' || info.kind === 'map') {
-          node.branches = extractRustBranches(lines, methodIdx)
+          node.branches = extractRustBranches(lines, methodIdx, method === 'parallel_mixed')
           if (config.nestingType) node.nestingType = config.nestingType
           if (config.completionConfig) node.completionConfig = config.completionConfig
           if (config.maxConcurrency != null) node.maxConcurrency = config.maxConcurrency
@@ -381,11 +402,17 @@ function extractNodes(
 
         if (info.kind === 'runInChildContext') {
           if (config.nestingType) node.nestingType = config.nestingType
+          if (config.subType) node.subType = config.subType
         }
 
         if (info.kind === 'step' || info.kind === 'withRetry') {
           if (config.stepSemantics) node.stepSemantics = config.stepSemantics
           if (config.retryStrategy) node.retryStrategy = config.retryStrategy
+          if (config.subType) node.subType = config.subType
+        }
+
+        if (info.kind === 'createCallback' || info.kind === 'waitForCallback') {
+          if (config.subType) node.subType = config.subType
         }
 
         nodes.push(node)
@@ -440,8 +467,18 @@ export class RustParser implements Parser {
     const contextNames = findContextParam(source)
     const workflowNodes = extractNodes(handler.body, contextNames, source, handler.offset)
 
-    const startNode: WorkflowNode = { id: 'node_start', kind: 'start', label: 'Start' }
-    const endNode: WorkflowNode = { id: 'node_end', kind: 'end', label: 'End' }
+    const startNode: WorkflowNode = {
+      id: 'node_start',
+      kind: 'start',
+      label: 'Start',
+      sourceLine: handler.offset,
+    }
+    const endNode: WorkflowNode = {
+      id: 'node_end',
+      kind: 'end',
+      label: 'End',
+      sourceLine: handler.offset + handler.body.split('\n').length - 1,
+    }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)
 

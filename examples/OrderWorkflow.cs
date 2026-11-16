@@ -1,8 +1,8 @@
 /**
  * Example durable function — order processing workflow (C#).
  *
- * Requires the preview NuGet package:
- *   dotnet add package Amazon.Lambda.DurableExecution --version 0.1.1-preview
+ * Requires the GA NuGet package:
+ *   dotnet add package Amazon.Lambda.DurableExecution --version 2.2.0
  *
  * Run: npx durable-viz examples/OrderWorkflow.cs --open
  */
@@ -38,7 +38,8 @@ public class Function
                 await Task.CompletedTask;
                 return new ValidatedOrder(order.OrderId, order.Items, order.Total, true, DateTime.UtcNow);
             },
-            name: "validate-order");
+            name: "validate-order",
+            config: new StepConfig { SubType = "OrderValidation" });
 
         // Reserve inventory in parallel
         var batch = await ctx.ParallelAsync(
@@ -71,7 +72,8 @@ public class Function
                     ctx.Logger.LogInformation("Awaiting approval for {OrderId}", order.OrderId);
                     await Task.CompletedTask;
                 },
-                name: "manager-approval");
+                name: "manager-approval",
+                config: new WaitForCallbackConfig { SubType = "ManagerApproval" });
 
             if (!approval.Approved)
             {

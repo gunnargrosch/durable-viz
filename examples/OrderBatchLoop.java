@@ -20,7 +20,7 @@ public class OrderBatchLoop extends DurableHandler<Batch, BatchResult> {
             ctx.step("validate-order", Order.class, stepCtx -> orderService.validate(order));
 
             if (order.getTotal() > 10000) {
-                ctx.waitForCallback("manager-approval", callbackId -> notifyManager(callbackId, order));
+                ctx.waitForCallback("manager-approval", (callbackId, stepCtx) -> notifyManager(callbackId, order));
             }
 
             ctx.step("charge-order", Payment.class, stepCtx -> paymentService.charge(order));

@@ -51,6 +51,8 @@ export interface WorkflowNode {
   stepSemantics?: string
   /** Tenant ID for multi-tenant invoke operations. */
   tenantId?: string
+  /** Custom operation subtype (e.g. "OrderCharge") recorded by the SDK. */
+  subType?: string
   /** Concurrency limit for parallel/map nodes (e.g. maxConcurrency, max_concurrency). */
   maxConcurrency?: number
   /** For loop nodes, how many subsequent flat nodes belong to the loop body. */

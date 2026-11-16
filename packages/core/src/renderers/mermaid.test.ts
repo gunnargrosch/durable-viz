@@ -46,6 +46,8 @@ describe('renderMermaid', () => {
 
     const clickLines = output.split('\n').filter((l) => l.includes('call onNodeClick'))
     assert.ok(clickLines.length >= 4, `Expected at least 4 click callbacks, got ${clickLines.length}`)
+    assert.ok(clickLines.some((l) => l.includes('node_start')), 'Start should be clickable')
+    assert.ok(clickLines.some((l) => l.includes('node_end')), 'End should be clickable')
   })
 
   it('wraps parallel branches in subgraph', () => {

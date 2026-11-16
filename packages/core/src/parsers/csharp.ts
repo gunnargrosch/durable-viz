@@ -2,7 +2,7 @@
  * C# parser for AWS Lambda Durable Execution SDK (.NET).
  *
  * Uses regex-based parsing to find durable workflow functions and extract
- * primitives. The .NET SDK (v1.0.0, GA) uses Async-suffixed
+ * primitives. The .NET SDK (v2.x, GA) uses Async-suffixed
  * methods on IDurableContext:
  *
  *   ctx.StepAsync(...)              → step
@@ -13,6 +13,7 @@
  *   ctx.RunInChildContextAsync(...) → runInChildContext
  *   ctx.InvokeAsync(...)            → invoke
  *   ctx.ParallelAsync(...)          → parallel
+ *   ctx.CreateParallel(...).Branch() → parallel
  *   ctx.MapAsync(...)               → map
  *
  * Entry points — two programming models:
@@ -55,6 +56,7 @@ const PRIMITIVES: Record<string, PrimitiveInfo> = {
   'RunInChildContextAsync': { kind: 'runInChildContext', idPrefix: 'child' },
   'InvokeAsync': { kind: 'invoke', idPrefix: 'invoke' },
   'ParallelAsync': { kind: 'parallel', idPrefix: 'parallel' },
+  'CreateParallel': { kind: 'parallel', idPrefix: 'parallel' },
   'MapAsync': { kind: 'map', idPrefix: 'map' },
 }
 
@@ -297,11 +299,18 @@ function extractNodes(
         if (info.kind === 'runInChildContext') {
           const config = extractCSharpConfig(lines, i)
           if (config.nestingType) node.nestingType = config.nestingType
+          if (config.subType) node.subType = config.subType
         }
 
         if (info.kind === 'step') {
           const config = extractCSharpConfig(lines, i)
           if (config.stepSemantics) node.stepSemantics = config.stepSemantics
+          if (config.subType) node.subType = config.subType
+        }
+
+        if (info.kind === 'createCallback' || info.kind === 'waitForCallback') {
+          const config = extractCSharpConfig(lines, i)
+          if (config.subType) node.subType = config.subType
         }
 
         nodes.push(node)
@@ -342,6 +351,10 @@ function extractNameArg(lines: string[], lineIdx: number): string | undefined {
   const nameMatch = callText.match(/name:\s*"([^"]+)"/)
   if (nameMatch) return nameMatch[1]
 
+  // Incremental parallel: ctx.CreateParallel("label" or name: "label"
+  const createMatch = callText.match(/CreateParallel\s*\(\s*(?:name:\s*)?(?:"([^"]+)"|(\w+))/)
+  if (createMatch) return createMatch[1] ?? createMatch[2]
+
   // First string argument: ctx.MethodAsync("label"
   const strMatch = callText.match(/\.\w+Async\s*<\s*[\w,\s]+\s*>\s*\(\s*"([^"]+)"/)
   if (strMatch) return strMatch[1]
@@ -379,7 +392,7 @@ function extractCSharpBranches(lines: string[], startLine: number): WorkflowBran
   const branches: WorkflowBranch[] = []
   const searchText = lines.slice(startLine, startLine + 40).join('\n')
 
-  const branchPattern = /new\s+DurableBranch\s*<\s*\w+\s*>\s*\(\s*"([^"]+)"/g
+  const branchPattern = /(?:new\s+DurableBranch\s*<\s*[^>]+\s*>\s*|\.Branch\s*<\s*[^>]+\s*>\s*)\(\s*"([^"]+)"/g
   let match
   while ((match = branchPattern.exec(searchText)) !== null) {
     branches.push({
@@ -404,6 +417,7 @@ interface CSharpConfigFlags {
   completionConfig?: string
   stepSemantics?: string
   tenantId?: string
+  subType?: string
   maxConcurrency?: number
 }
 
@@ -422,6 +436,9 @@ function extractCSharpConfig(lines: string[], lineIdx: number): CSharpConfigFlag
 
   const tenant = searchText.match(/TenantId\s*=\s*"([^"]+)"/)
   if (tenant) flags.tenantId = tenant[1]
+
+  const subType = searchText.match(/SubType\s*=\s*"([^"]+)"/)
+  if (subType) flags.subType = subType[1]
 
   const concurrency = searchText.match(/MaxConcurrency\s*=\s*(\d+)/)
   if (concurrency) flags.maxConcurrency = Number(concurrency[1])
@@ -470,8 +487,18 @@ export class CSharpParser implements Parser {
     const workflowOffset = lineOfSubstring(source, workflowBody)
     const workflowNodes = extractNodes(workflowBody, contextNames, source, workflowOffset)
 
-    const startNode: WorkflowNode = { id: 'node_start', kind: 'start', label: 'Start' }
-    const endNode: WorkflowNode = { id: 'node_end', kind: 'end', label: 'End' }
+    const startNode: WorkflowNode = {
+      id: 'node_start',
+      kind: 'start',
+      label: 'Start',
+      sourceLine: workflowOffset,
+    }
+    const endNode: WorkflowNode = {
+      id: 'node_end',
+      kind: 'end',
+      label: 'End',
+      sourceLine: workflowOffset + workflowBody.split('\n').length - 1,
+    }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)
 

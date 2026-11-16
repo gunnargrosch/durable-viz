@@ -27,7 +27,7 @@ public class Function
             if (order.Total > 10000)
             {
                 await ctx.WaitForCallbackAsync(
-                    async (callbackId, _) => await NotifyManager(callbackId, order),
+                    async (callbackId, _, _) => await NotifyManager(callbackId, order),
                     name: "manager-approval");
             }
 

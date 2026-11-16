@@ -515,8 +515,18 @@ export class JavaParser implements Parser {
     const handlerOffset = lineOfSubstring(source, handlerBody)
     const workflowNodes = extractNodes(handlerBody, contextNames, helpers, new Set(), source, handlerOffset)
 
-    const startNode: WorkflowNode = { id: 'node_start', kind: 'start', label: 'Start' }
-    const endNode: WorkflowNode = { id: 'node_end', kind: 'end', label: 'End' }
+    const startNode: WorkflowNode = {
+      id: 'node_start',
+      kind: 'start',
+      label: 'Start',
+      sourceLine: handlerOffset,
+    }
+    const endNode: WorkflowNode = {
+      id: 'node_end',
+      kind: 'end',
+      label: 'End',
+      sourceLine: handlerOffset + handlerBody.split('\n').length - 1,
+    }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)
 

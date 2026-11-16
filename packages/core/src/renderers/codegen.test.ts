@@ -989,7 +989,23 @@ describe('Go code generation', () => {
       'durable.WaitForCallback[any](ctx, "my-callback"',
       'durable.CreateCallback[any](ctx, "create-cb"',
       'durable.WaitForCondition[any](ctx, "poll-status"',
-      'durable.ConditionConfig[any]{}',
+      'durable.ConditionConfig[any]{',
+      'durable.MustNewWaitStrategy(durable.WaitConfig[any]{',
+      'InitialDelay: 5 * time.Second',
+    )
+  })
+
+  it('emits custom subtypes for steps, callbacks, and child contexts', () => {
+    const code = generateCode(makeGraph('test', [
+      makeNode('a', 'step', 'charge', { subType: 'ChargeCard' }),
+      makeNode('b', 'createCallback', 'approval', { subType: 'ManagerApproval' }),
+      makeNode('c', 'runInChildContext', 'settle', { subType: 'Settlement' }),
+    ]), { language: 'go' })
+    assertContains(
+      code,
+      'durable.WithStepSubType("ChargeCard")',
+      'durable.WithCallbackSubType("ManagerApproval")',
+      'durable.WithChildSubType("Settlement")',
     )
   })
 
