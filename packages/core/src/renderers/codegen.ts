@@ -964,7 +964,7 @@ export function generateGo(graph: WorkflowGraph): string {
   const lines: string[] = []
 
   const needsTime = graph.nodes.some((n) =>
-    n.kind === 'wait' || (n.timeout != null && /time\./.test(n.timeout))
+    n.kind === 'wait' || n.kind === 'waitForCondition' || (n.timeout != null && /time\./.test(n.timeout))
   )
   const needsAws = graph.nodes.some((n) => /tolerated/.test(n.completionConfig ?? ''))
 
@@ -1065,6 +1065,7 @@ function genGoNode(
       const opts: string[] = []
       if (node.stepSemantics === 'AtMostOncePerRetry') opts.push('durable.WithSemantics(durable.AtMostOncePerRetry)')
       if (node.retryStrategy) opts.push(`durable.WithRetry(${goRetryStrategy(node.retryStrategy)})`)
+      if (node.subType) opts.push(`durable.WithStepSubType("${node.subType}")`)
       const args = opts.length ? `, ${opts.join(', ')}` : ''
       return `${pad}${vname}, err := durable.Step(ctx, "${node.label}", func(stepCtx durable.StepContext) (any, error) {\n${pad}${GO_IDENT}// TODO: implement ${node.label}\n${pad}${GO_IDENT}return nil, nil\n${pad}}${args})${errCheck}`
     }
@@ -1080,17 +1081,23 @@ function genGoNode(
     }
 
     case 'waitForCallback': {
-      const timeout = node.timeout && /time\./.test(node.timeout) ? `, durable.WithCallbackTimeout(${node.timeout})` : ''
-      return `${pad}${vname}, err := durable.WaitForCallback[any](ctx, "${node.label}", func(stepCtx durable.StepContext, callbackID string) error {\n${pad}${GO_IDENT}// TODO: notify external system with callbackID\n${pad}${GO_IDENT}return nil\n${pad}}${timeout})${errCheck}`
+      const opts: string[] = []
+      if (node.timeout && /time\./.test(node.timeout)) opts.push(`durable.WithCallbackTimeout(${node.timeout})`)
+      if (node.subType) opts.push(`durable.WithCallbackSubType("${node.subType}")`)
+      const args = opts.length ? `, ${opts.join(', ')}` : ''
+      return `${pad}${vname}, err := durable.WaitForCallback[any](ctx, "${node.label}", func(stepCtx durable.StepContext, callbackID string) error {\n${pad}${GO_IDENT}// TODO: notify external system with callbackID\n${pad}${GO_IDENT}return nil\n${pad}}${args})${errCheck}`
     }
 
     case 'createCallback': {
-      const timeout = node.timeout && /time\./.test(node.timeout) ? `, durable.WithCallbackTimeout(${node.timeout})` : ''
-      return `${pad}${vname}, err := durable.CreateCallback[any](ctx, "${node.label}"${timeout})${errCheck}`
+      const opts: string[] = []
+      if (node.timeout && /time\./.test(node.timeout)) opts.push(`durable.WithCallbackTimeout(${node.timeout})`)
+      if (node.subType) opts.push(`durable.WithCallbackSubType("${node.subType}")`)
+      const args = opts.length ? `, ${opts.join(', ')}` : ''
+      return `${pad}${vname}, err := durable.CreateCallback[any](ctx, "${node.label}"${args})${errCheck}`
     }
 
     case 'waitForCondition':
-      return `${pad}${vname}, err := durable.WaitForCondition[any](ctx, "${node.label}", func(stepCtx durable.StepContext, state any) (any, error) {\n${pad}${GO_IDENT}// TODO: poll and update state\n${pad}${GO_IDENT}return state, nil\n${pad}}, durable.ConditionConfig[any]{})${errCheck}`
+      return `${pad}${vname}, err := durable.WaitForCondition[any](ctx, "${node.label}", func(stepCtx durable.StepContext, state any) (any, error) {\n${pad}${GO_IDENT}// TODO: poll and update state\n${pad}${GO_IDENT}return state, nil\n${pad}}, durable.ConditionConfig[any]{\n${pad}${GO_IDENT}WaitStrategy: durable.MustNewWaitStrategy(durable.WaitConfig[any]{\n${pad}${GO_IDENT}${GO_IDENT}MaxAttempts: 10,\n${pad}${GO_IDENT}${GO_IDENT}InitialDelay: 5 * time.Second,\n${pad}${GO_IDENT}}),\n${pad}})${errCheck}`
 
     case 'parallel': {
       const opts = goBatchOptions(node)
@@ -1109,8 +1116,11 @@ function genGoNode(
     }
 
     case 'runInChildContext': {
-      const opts = node.nestingType === 'FLAT' ? ', durable.WithChildVirtual()' : ''
-      return `${pad}${vname}, err := durable.RunInChildContext[any](ctx, "${node.label}", func(child durable.Context) (any, error) {\n${pad}${GO_IDENT}// TODO: implement ${node.label} in child context\n${pad}${GO_IDENT}return nil, nil\n${pad}}${opts})${errCheck}`
+      const opts: string[] = []
+      if (node.nestingType === 'FLAT') opts.push('durable.WithChildVirtual()')
+      if (node.subType) opts.push(`durable.WithChildSubType("${node.subType}")`)
+      const args = opts.length ? `, ${opts.join(', ')}` : ''
+      return `${pad}${vname}, err := durable.RunInChildContext[any](ctx, "${node.label}", func(child durable.Context) (any, error) {\n${pad}${GO_IDENT}// TODO: implement ${node.label} in child context\n${pad}${GO_IDENT}return nil, nil\n${pad}}${args})${errCheck}`
     }
 
     case 'withRetry':

@@ -5,7 +5,7 @@
  * Deploys on the managed dotnet10 runtime with the handler string:
  *   OrderProcessor::OrderProcessor.Function::Handler
  *
- * Requires: dotnet add package Amazon.Lambda.DurableExecution --version 0.1.1-preview
+ * Requires: dotnet add package Amazon.Lambda.DurableExecution --version 2.2.0
  *
  * Run: npx durable-viz examples/OrderProcessor.cs --open
  */

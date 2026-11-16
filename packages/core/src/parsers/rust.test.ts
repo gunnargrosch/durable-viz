@@ -83,6 +83,12 @@ describe('RustParser', () => {
 
     const nodesWithLines = graph.nodes.filter((n) => n.sourceLine != null)
     assert.ok(nodesWithLines.length >= 5, `Expected at least 5 nodes with source lines, got ${nodesWithLines.length}`)
+
+    const start = graph.nodes.find((n) => n.kind === 'start')
+    const end = graph.nodes.find((n) => n.kind === 'end')
+    assert.ok(start?.sourceLine, 'Start should have a source line')
+    assert.ok(end?.sourceLine, 'End should have a source line')
+    assert.ok(end!.sourceLine! > start!.sourceLine!, 'End should follow Start')
   })
 
   it('generates valid edges', () => {
@@ -95,6 +101,29 @@ describe('RustParser', () => {
 
     const endEdges = graph.edges.filter((e) => e.to === 'node_end')
     assert.ok(endEdges.length >= 1)
+  })
+
+  it('parses parallel_mixed with BranchSet branches', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_parallel_mixed.rs'))
+
+    const parallel = graph.nodes.find((n) => n.kind === 'parallel')
+    assert.ok(parallel)
+    assert.equal(parallel.label, 'load-order')
+    assert.equal(parallel.maxConcurrency, 2)
+    assert.deepEqual(parallel.branches?.map((b) => b.name), ['load-profile', 'count-orders'])
+  })
+
+  it('extracts custom sub_type labels', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_workflow_config.rs'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step' && n.label === 'charge-payment')
+    assert.equal(step?.subType, 'ChargeCard')
+
+    const child = graph.nodes.find((n) => n.kind === 'runInChildContext')
+    assert.equal(child?.subType, 'Settlement')
+
+    const callback = graph.nodes.find((n) => n.kind === 'createCallback')
+    assert.equal(callback?.subType, 'ManagerApproval')
   })
 
   it('parses inline closure entry points and combinator calls', () => {

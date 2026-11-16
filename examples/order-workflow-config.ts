@@ -4,6 +4,7 @@
  * - nestingType on parallel, map, runInChildContext
  * - completionConfig on parallel, map
  * - tenantId on invoke
+ * - custom subType labels
  */
 
 import {
@@ -31,7 +32,7 @@ export const handler = withDurableExecution(async (
   // Step with AtMostOncePerRetry semantics
   const order = await context.step('validate-order', async () => {
     return { ...event, validated: true, timestamp: new Date().toISOString() }
-  }, { semantics: StepSemantics.AtMostOncePerRetry })
+  }, { semantics: StepSemantics.AtMostOncePerRetry, subType: 'OrderValidation' })
 
   // Parallel with FLAT nesting and firstSuccessful completion
   const results = await context.parallel('prepare-order', [
@@ -88,6 +89,7 @@ export const handler = withDurableExecution(async (
     },
     {
       isVirtual: true,
+      subType: 'Settlement',
     },
   )
 

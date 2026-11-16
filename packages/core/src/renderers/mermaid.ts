@@ -48,6 +48,7 @@ function buildAnnotation(node: WorkflowNode): string {
   if (node.completionConfig) parts.push(node.completionConfig)
   if (node.stepSemantics) parts.push(node.stepSemantics)
   if (node.tenantId) parts.push(`tenant ${node.tenantId}`)
+  if (node.subType) parts.push(`subtype ${node.subType}`)
   if (node.maxConcurrency != null) parts.push(`concurrency ${node.maxConcurrency}`)
   if (parts.length === 0) return ''
   return '<br>' + parts.join('<br>')

@@ -40,7 +40,7 @@ async fn handler(
         .await?;
 
     let approval = ctx
-        .wait_for_callback::<String, _, _>(|_cb_ctx, _cb_id| async { Ok(()) })
+        .wait_for_callback::<String>(|_step_ctx, _cb_id| async { Ok(()) })
         .name("manager-approval")
         .await?;
 
@@ -57,6 +57,6 @@ async fn handler(
 
 #[tokio::main]
 async fn main() -> Result<(), lambda_runtime::Error> {
-    lambda_runtime::tracing::init_default_subscriber();
+    durable::init_default_subscriber()?;
     durable::run(handler).await
 }

@@ -10,7 +10,7 @@
 
 Visualize and build [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows. Turn your handler code into a flowchart, or design a workflow from scratch and generate boilerplate code — no deployment or execution required.
 
-Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes.
+Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes. SDK versions covered: JS 3.0, Python 3.0, Java 3.x, .NET 2.x, Rust 0.2, and Go 1.0 (GA).
 
 ```mermaid
 graph LR
@@ -100,11 +100,13 @@ npx durable-viz examples/OrderBatchLoop.cs --open
 # Rust
 npx durable-viz examples/order_workflow.rs --open
 npx durable-viz examples/order_workflow_config.rs --open
+npx durable-viz examples/order_parallel_mixed.rs --open
 npx durable-viz examples/order_batch_loop.rs --open
 
 # Go
 npx durable-viz examples/order_workflow.go --open
 npx durable-viz examples/order_workflow_config.go --open
+npx durable-viz examples/order_parallel_mixed.go --open
 npx durable-viz examples/order_batch_loop.go --open
 ```
 
@@ -154,7 +156,7 @@ The diagram appears in a side panel. It auto-refreshes when you save the file.
 | --- | --- |
 | **Scroll zoom** | Scroll wheel to zoom in/out, zooms toward cursor |
 | **Click-drag pan** | Click and drag to move around the diagram |
-| **Click-to-navigate** | Click any node to jump to that line in the source file |
+| **Click-to-navigate** | Click any node, including Start and End, to jump to that line in the source file |
 | **Auto-refresh** | Diagram updates on file save |
 | **Fit to view** | Fit button and auto-fit on open |
 | **Direction toggle** | Switch between top-down (TD) and left-right (LR) layout |
@@ -255,9 +257,9 @@ TypeScript also detects `context.promise.all()`, `context.promise.any()`, `conte
 
 Java also detects `DurableFuture.allOf(futures...)` and `DurableFuture.anyOf(futures...)` as promise combinators.
 
-Rust also detects the concurrency combinators `ctx.join_all()`, `ctx.try_join_all()`, `ctx.select_ok()`, and `ctx.race()`, plus the `.future()` and `.spawn()` builder modifiers.
+Rust also detects `ctx.parallel_mixed()` with its `BranchSet` branches, the concurrency combinators `ctx.join_all()`, `ctx.try_join_all()`, `ctx.select_ok()`, and `ctx.race()`, plus the `.future()` and `.spawn()` builder modifiers.
 
-Go also detects `durable.All()`, `durable.AllSettled()`, `durable.Any()`, `durable.Race()`, `durable.Join()`, and `durable.Select()`, the concurrent child context `durable.Go()`, and the `StepAsync`/`InvokeAsync`/`WaitAsync`/`RunInChildContextAsync` variants.
+Go (GA v1.0) also detects `durable.ParallelMixed()` with its `NewTypedBranch` branches, `durable.All()`, `durable.AllSettled()`, `durable.Any()`, `durable.Race()`, `durable.Join()`, and `durable.Select()`, the concurrent child context `durable.Go()`, and the `StepAsync`/`InvokeAsync`/`WaitAsync`/`RunInChildContextAsync` variants.
 
 ### Config-Level Features
 
@@ -269,6 +271,7 @@ The parser extracts configuration metadata and displays it as annotations on dia
 | Completion config | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Step semantics (`AtMostOncePerRetry`) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Tenant isolation (`tenantId`) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Custom subtype (`subType`) | ✓ | ✓ | — | ✓ | ✓ | ✓ |
 | Concurrency limit (`maxConcurrency`) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 ### Visual Encoding
@@ -286,7 +289,7 @@ Each primitive type has a distinct shape and color in the diagram:
 | Loop | Rounded rectangle, body in a dashed box | Olive |
 | Child Context / With Retry | Subroutine | Teal |
 
-Config-level details (nesting type, completion rules, step semantics, tenant isolation) are shown as annotations below the node label.
+Config-level details (nesting type, completion rules, step semantics, tenant isolation, custom subtypes) are shown as annotations below the node label.
 
 ## How It Works
 
@@ -311,15 +314,15 @@ Regex-based parser. Finds classes extending `DurableHandler` and extracts `ctx.<
 
 ### C# (.NET)
 
-Regex-based parser. Finds `DurableFunction.WrapAsync` calls to locate the workflow function, then extracts `ctx.<Method>Async()` calls from the workflow body. Supports both the **executable** model (`Main` + `LambdaBootstrap`) and the **class-library** model (`[assembly: LambdaSerializer]`), plus the **Annotations** model (`[DurableExecution]` attribute on a method with an `IDurableContext` parameter). Extracts names from `name:` named arguments and detects `DurableBranch<T>` patterns for parallel branches. Handles Allman-style braces (common C# convention) for `if`/`else` condition detection.
+Regex-based parser. Finds `DurableFunction.WrapAsync` calls to locate the workflow function, then extracts `ctx.<Method>Async()` calls from the workflow body. Supports both the **executable** model (`Main` + `LambdaBootstrap`) and the **class-library** model (`[assembly: LambdaSerializer]`), plus the **Annotations** model (`[DurableExecution]` attribute on a method with an `IDurableContext` parameter). Extracts names from `name:` named arguments, custom `SubType` labels, and both `DurableBranch<T>` and incremental `CreateParallel().Branch<T>()` patterns for parallel branches. Handles Allman-style braces (common C# convention) for `if`/`else` condition detection.
 
 ### Rust
 
-Regex-based parser. Finds `durable::run(handler)` entry points (also `run_with_options` and `wrap`), resolves the `use aws_durable_execution_sdk as <alias>;` crate alias, and extracts the fluent builder chain: `ctx.step(..).name("greet").await?`. Handles rustfmt's split style (`ctx` on one line, `.step(` on the next) and the turbofish generics on `invoke::<T, _>` / `wait_for_callback::<T, _, _>`. Names are resolved in layers: string literal, local `let` constant propagation, then identifier fallback. Branch names come from `Branch::new("name", ..)`, and the concurrency combinators `join_all`, `try_join_all`, `select_ok`, and `race` map to the promise-combinator kinds.
+Regex-based parser. Finds `durable::run(handler)` entry points (also `run_with_options` and `wrap`), resolves the `use aws_durable_execution_sdk as <alias>;` crate alias, and extracts the fluent builder chain: `ctx.step(..).name("greet").await?` (SDK 0.2). Handles rustfmt's split style (`ctx` on one line, `.step(` on the next) and the turbofish generics on `invoke::<T>`. Names are resolved in layers: string literal, local `let` constant propagation, then identifier fallback. Branch names come from `Branch::new("name", ..)` and `BranchSet::add("name", ..)`, `.sub_type(...)` labels are shown as annotations, and the concurrency combinators `join_all`, `try_join_all`, `select_ok`, and `race` map to the promise-combinator kinds.
 
 ### Go
 
-Regex-based parser. Finds `durable.Start(handler)` (also `durable.Wrap`) entry points, resolves the SDK import alias, and extracts the package-level generic calls. The operation name is the second argument — `durable.Step(ctx, "greet", ...)` — so names come straight from the string literal, with local `const`/`:=` string-constant propagation and identifier fallback. Structural scanning runs over a length-preserving mask of the source with string, rune, and comment contents blanked, so durable-looking text inside them is ignored and delimiters cannot confuse brace/paren matching; nested generic type arguments (`durable.Invoke[map[string][]string, any](...)`) are handled too. Multi-line calls are balanced, so durable operations nested inside a branch or map callback are attributed to that compound node rather than the top level. Branch names come from `durable.Branch[T]{Name: "..."}` literals; map callbacks are summarized as an `each item` branch containing their inner operations. `Go` maps to a child context, and `All`, `AllSettled`, `Any`, `Race`, `Join`, and `Select` map to the promise-combinator kinds. Go initializer-style `if` statements (`if x, err := f(); err != nil`) are skipped so ordinary error handling is not mistaken for a workflow condition.
+Regex-based parser for the GA Go SDK. Finds `durable.Start(handler)` (also `durable.Wrap`) entry points, resolves the SDK import alias, and extracts the package-level generic calls. The operation name is the second argument — `durable.Step(ctx, "greet", ...)` — so names come straight from the string literal, with local `const`/`:=` string-constant propagation and identifier fallback. Structural scanning runs over a length-preserving mask of the source with string, rune, and comment contents blanked, so durable-looking text inside them is ignored and delimiters cannot confuse brace/paren matching; nested generic type arguments (`durable.Invoke[map[string][]string, any](...)`) are handled too. Multi-line calls are balanced, so durable operations nested inside a branch or map callback are attributed to that compound node rather than the top level. Branch names come from `durable.Branch[T]{Name: "..."}` literals and `durable.NewTypedBranch("...")` calls for `ParallelMixed`; map callbacks are summarized as an `each item` branch containing their inner operations. `WithStepSubType`, `WithCallbackSubType`, and `WithChildSubType` labels are shown as annotations. `Go` maps to a child context, and `All`, `AllSettled`, `Any`, `Race`, `Join`, and `Select` map to the promise-combinator kinds. Go initializer-style `if` statements (`if x, err := f(); err != nil`) are skipped so ordinary error handling is not mistaken for a workflow condition.
 
 ### Conditionals
 
@@ -349,11 +352,13 @@ The `examples/` directory contains sample handlers for each language:
 | `OrderWorkflow.cs` | C# | step, parallel, wait, waitForCallback, condition |
 | `OrderProcessor.cs` | C# | step, parallel, wait, invoke, waitForCallback, condition |
 | `OrderBatchLoop.cs` | C# | step, wait, waitForCallback, condition, loop |
-| `order_workflow.rs` | Rust | step, parallel, wait, waitForCallback, condition, maxConcurrency |
+| `order_workflow.rs` | Rust | step, parallel, wait, waitForCallback, condition, subtypes, maxConcurrency |
 | `order_workflow_config.rs` | Rust | step, invoke, map, runInChildContext, withRetry, waitForCondition, createCallback, race, config features |
+| `order_parallel_mixed.rs` | Rust | parallel_mixed with BranchSet, step, subtypes |
 | `order_batch_loop.rs` | Rust | step, wait, waitForCallback, condition, loop |
 | `order_workflow.go` | Go | step, parallel, wait, waitForCallback, condition |
 | `order_workflow_config.go` | Go | step, invoke, map, runInChildContext, withRetry, waitForCondition, combinators, config features |
+| `order_parallel_mixed.go` | Go | ParallelMixed with NewTypedBranch, step, wait, waitForCallback, subtypes |
 | `order_batch_loop.go` | Go | step, wait, waitForCallback, condition, loop |
 
 ```shell

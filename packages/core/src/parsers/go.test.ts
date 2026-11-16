@@ -131,6 +131,43 @@ describe('GoParser', () => {
     assert.equal(retry.retryStrategy, 'MustLinearBackoff')
   })
 
+  it('extracts custom subtypes from step and child options', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_workflow_config.go'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step' && n.label === 'charge-payment')
+    assert.equal(step?.subType, 'ChargeCard')
+
+    const child = graph.nodes.find((n) => n.kind === 'runInChildContext')
+    assert.equal(child?.subType, 'Settlement')
+  })
+
+  it('parses ParallelMixed with NewTypedBranch branches', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_parallel_mixed.go'))
+
+    const parallel = graph.nodes.find((n) => n.kind === 'parallel')
+    assert.ok(parallel)
+    assert.equal(parallel.label, 'load-order')
+    assert.equal(parallel.maxConcurrency, 3)
+    assert.deepEqual(parallel.branches?.map((b) => b.name), [
+      'load-profile',
+      'count-orders',
+      'reserve-inventory',
+    ])
+
+    const callback = graph.nodes.find((n) => n.kind === 'waitForCallback')
+    assert.equal(callback?.subType, 'ManagerApproval')
+  })
+
+  it('includes source lines on Start and End', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_workflow.go'))
+
+    const start = graph.nodes.find((n) => n.kind === 'start')
+    const end = graph.nodes.find((n) => n.kind === 'end')
+    assert.ok(start?.sourceLine, 'Start should have a source line')
+    assert.ok(end?.sourceLine, 'End should have a source line')
+    assert.ok(end!.sourceLine! > start!.sourceLine!, 'End should follow Start')
+  })
+
   it('maps concurrency combinators to promise kinds', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'order_workflow_config.go'))
 

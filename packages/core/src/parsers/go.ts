@@ -1,5 +1,5 @@
 /**
- * Go parser for the AWS Durable Execution SDK for Go (preview).
+ * Go parser for the AWS Durable Execution SDK for Go (GA v1.0).
  *
  * Uses regex-based parsing to find `durable.Start(handler)` entry points and
  * extract the package-level generic primitive functions. The Go SDK uses
@@ -53,6 +53,7 @@ const PRIMITIVES: Record<string, PrimitiveInfo> = {
   'Invoke': { kind: 'invoke', idPrefix: 'invoke' },
   'InvokeAsync': { kind: 'invoke', idPrefix: 'invoke' },
   'Parallel': { kind: 'parallel', idPrefix: 'parallel' },
+  'ParallelMixed': { kind: 'parallel', idPrefix: 'parallel' },
   'Map': { kind: 'map', idPrefix: 'map' },
   'Wait': { kind: 'wait', idPrefix: 'wait' },
   'WaitAsync': { kind: 'wait', idPrefix: 'wait' },
@@ -440,6 +441,7 @@ interface GoConfigFlags {
   completionConfig?: string
   stepSemantics?: string
   tenantId?: string
+  subType?: string
   maxConcurrency?: number
   retryStrategy?: string
   timeout?: string
@@ -473,6 +475,9 @@ function extractGoConfig(callText: string, alias: string): GoConfigFlags {
   const tenant = callText.match(/WithTenantID\s*\(\s*"([^"]+)"/)
   if (tenant) flags.tenantId = tenant[1]
 
+  const subType = callText.match(/With(?:Step|Callback|Child)SubType\s*\(\s*"([^"]+)"/)
+  if (subType) flags.subType = subType[1]
+
   const retry = callText.match(/WithRetry\s*\(\s*([^,)]+?)\s*\)/)
   if (retry) {
     const strategy = retry[1].trim()
@@ -490,16 +495,38 @@ function extractGoConfig(callText: string, alias: string): GoConfigFlags {
 // Branch extraction
 // ---------------------------------------------------------------------------
 
-/** Extract parallel/select branch names from `durable.Branch[T]{Name: "..."}` literals. */
-function extractBranches(callText: string): WorkflowBranch[] {
+/**
+ * Extract parallel/select branch names from `durable.Branch[T]{Name: "..."}`
+ * literals and `ParallelMixed` branches built with `durable.NewTypedBranch`.
+ */
+function extractBranches(callText: string, source?: string, callLine?: number): WorkflowBranch[] {
   const branches: WorkflowBranch[] = []
   const mask = maskCode(callText)
-  const pattern = /Name\s*:\s*"([^"]*)"/g
-  let match
-  while ((match = pattern.exec(callText)) !== null) {
+  const names = new Set<string>()
+
+  for (const match of callText.matchAll(/Name\s*:\s*"([^"]*)"/g)) {
     // Ignore matches that fall inside a string or comment (masked to spaces).
     if (mask[match.index] === ' ') continue
-    const name = match[1] || 'branch'
+    names.add(match[1] || 'branch')
+  }
+
+  const typedPattern = /NewTypedBranch\s*(?:\[[^\]]*\])?\s*\(\s*"([^"]*)"/g
+  for (const match of callText.matchAll(typedPattern)) {
+    if (mask[match.index] === ' ') continue
+    names.add(match[1] || 'branch')
+  }
+
+  // ParallelMixed branches are often built in variables before the call, so
+  // look at the surrounding lines as well.
+  if (source && callLine != null) {
+    const sourceLines = source.split('\n')
+    const window = sourceLines.slice(Math.max(0, callLine - 40), callLine + 1).join('\n')
+    for (const match of window.matchAll(typedPattern)) {
+      names.add(match[1] || 'branch')
+    }
+  }
+
+  for (const name of names) {
     branches.push({
       name,
       dynamic: false,
@@ -698,7 +725,7 @@ function extractNodes(
       }
 
       if (info.kind === 'parallel') {
-        node.branches = extractBranches(callText)
+        node.branches = extractBranches(callText, source, absLine)
         if (config.nestingType) node.nestingType = config.nestingType
         if (config.completionConfig) node.completionConfig = config.completionConfig
         if (config.maxConcurrency != null) node.maxConcurrency = config.maxConcurrency
@@ -711,13 +738,19 @@ function extractNodes(
         if (config.maxConcurrency != null) node.maxConcurrency = config.maxConcurrency
       }
 
-      if (info.kind === 'runInChildContext' && config.nestingType) {
-        node.nestingType = config.nestingType
+      if (info.kind === 'runInChildContext') {
+        if (config.nestingType) node.nestingType = config.nestingType
+        if (config.subType) node.subType = config.subType
       }
 
       if (info.kind === 'step') {
         if (config.stepSemantics) node.stepSemantics = config.stepSemantics
         if (config.retryStrategy) node.retryStrategy = config.retryStrategy
+        if (config.subType) node.subType = config.subType
+      }
+
+      if (info.kind === 'createCallback' || info.kind === 'waitForCallback') {
+        if (config.subType) node.subType = config.subType
       }
 
       if (info.kind === 'withRetry') {
@@ -799,8 +832,18 @@ export class GoParser implements Parser {
       alias,
     )
 
-    const startNode: WorkflowNode = { id: 'node_start', kind: 'start', label: 'Start' }
-    const endNode: WorkflowNode = { id: 'node_end', kind: 'end', label: 'End' }
+    const startNode: WorkflowNode = {
+      id: 'node_start',
+      kind: 'start',
+      label: 'Start',
+      sourceLine: handler.offset,
+    }
+    const endNode: WorkflowNode = {
+      id: 'node_end',
+      kind: 'end',
+      label: 'End',
+      sourceLine: handler.offset + handler.body.split('\n').length - 1,
+    }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)
 

@@ -103,6 +103,12 @@ describe('CSharpParser', () => {
 
     const nodesWithLines = graph.nodes.filter((n) => n.sourceLine != null)
     assert.ok(nodesWithLines.length >= 5, `Expected at least 5 nodes with source lines, got ${nodesWithLines.length}`)
+
+    const start = graph.nodes.find((n) => n.kind === 'start')
+    const end = graph.nodes.find((n) => n.kind === 'end')
+    assert.ok(start?.sourceLine, 'Start should have a source line')
+    assert.ok(end?.sourceLine, 'End should have a source line')
+    assert.ok(end!.sourceLine! > start!.sourceLine!, 'End should follow Start')
   })
 
   it('generates valid edges', () => {
@@ -190,6 +196,29 @@ describe('CSharpParser', () => {
     const step = graph.nodes.find((n) => n.label === 'idempotent-step')
     assert.ok(step, 'Should find step node')
     assert.equal(step.stepSemantics, 'AtMostOncePerRetry')
+  })
+
+  it('parses the incremental CreateParallel API and its branches', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'DurableIncrementalParallel.cs'))
+
+    const parallel = graph.nodes.find((n) => n.kind === 'parallel')
+    assert.ok(parallel)
+    assert.equal(parallel.label, 'prepare-order')
+    assert.equal(parallel.maxConcurrency, 2)
+    assert.deepEqual(parallel.branches?.map((b) => b.name), ['reserve-inventory', 'process-payment'])
+
+    const step = graph.nodes.find((n) => n.kind === 'step' && n.label === 'ship-order')
+    assert.equal(step?.subType, 'ShipOrder')
+  })
+
+  it('extracts custom SubType labels from step and callback config', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'OrderWorkflow.cs'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step' && n.label === 'validate-order')
+    assert.equal(step?.subType, 'OrderValidation')
+
+    const callback = graph.nodes.find((n) => n.kind === 'waitForCallback')
+    assert.equal(callback?.subType, 'ManagerApproval')
   })
 
   it('extracts tenantId from InvokeConfig', () => {

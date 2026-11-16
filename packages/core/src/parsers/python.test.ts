@@ -59,6 +59,12 @@ describe('PythonParser', () => {
 
     const nodesWithLines = graph.nodes.filter((n) => n.sourceLine != null)
     assert.ok(nodesWithLines.length >= 4, `Expected at least 4 nodes with source lines, got ${nodesWithLines.length}`)
+
+    const start = graph.nodes.find((n) => n.kind === 'start')
+    const end = graph.nodes.find((n) => n.kind === 'end')
+    assert.ok(start?.sourceLine, 'Start should have a source line')
+    assert.ok(end?.sourceLine, 'End should have a source line')
+    assert.ok(end!.sourceLine! > start!.sourceLine!, 'End should follow Start')
   })
 
   it('generates valid edges', () => {
@@ -94,6 +100,13 @@ describe('PythonParser', () => {
     const step = graph.nodes.find((n) => n.kind === 'step' && n.label === 'validate_order')
     assert.ok(step, 'Should find validate_order step')
     assert.equal(step.stepSemantics, 'AtMostOncePerRetry')
+  })
+
+  it('extracts a custom sub_type from StepConfig', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_processor_with_retry.py'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step' && n.label === 'validate_order')
+    assert.equal(step?.subType, 'OrderValidation')
   })
 
   it('extracts nesting_type from parallel config', () => {

@@ -70,6 +70,12 @@ describe('TypeScriptParser', () => {
     for (const node of nodesWithLines) {
       assert.ok(node.sourceLine! > 0, `Source line should be positive, got ${node.sourceLine}`)
     }
+
+    const start = graph.nodes.find((n) => n.kind === 'start')
+    const end = graph.nodes.find((n) => n.kind === 'end')
+    assert.ok(start?.sourceLine, 'Start should have a source line')
+    assert.ok(end?.sourceLine, 'End should have a source line')
+    assert.ok(end!.sourceLine! > start!.sourceLine!, 'End should follow Start')
   })
 
   it('generates edges connecting all nodes', () => {
@@ -114,6 +120,16 @@ describe('TypeScriptParser', () => {
     const step = graph.nodes.find((n) => n.kind === 'step' && n.label === 'validate-order')
     assert.ok(step, 'Should find validate-order step')
     assert.equal(step.stepSemantics, 'AtMostOncePerRetry')
+  })
+
+  it('detects custom subType labels', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order-workflow-config.ts'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step' && n.label === 'validate-order')
+    assert.equal(step?.subType, 'OrderValidation')
+
+    const child = graph.nodes.find((n) => n.kind === 'runInChildContext')
+    assert.equal(child?.subType, 'Settlement')
   })
 
   it('detects nestingType on parallel node', () => {
