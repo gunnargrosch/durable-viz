@@ -1,6 +1,6 @@
 # Durable Viz
 
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/gunnargrosch.durable-viz)](https://marketplace.visualstudio.com/items?itemName=gunnargrosch.durable-viz)
+[![VS Code Marketplace](https://vsmarketplacebadges.dev/version/gunnargrosch.durable-viz.svg)](https://marketplace.visualstudio.com/items?itemName=gunnargrosch.durable-viz)
 [![Open VSX](https://img.shields.io/open-vsx/v/gunnargrosch/durable-viz)](https://open-vsx.org/extension/gunnargrosch/durable-viz)
 
 Visualize and build [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows in VS Code.
