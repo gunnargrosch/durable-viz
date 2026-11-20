@@ -28,6 +28,7 @@ import { readFileSync } from 'node:fs'
 import type { WorkflowNode, WorkflowBranch, WorkflowGraph } from '../graph.js'
 import { buildEdges, loopLabel } from '../graph.js'
 import type { Parser, ParseOptions } from '../parser.js'
+import { lastContentLine } from '../source-lines.js'
 import { basename } from 'node:path'
 
 let nodeCounter = 0
@@ -842,7 +843,7 @@ export class GoParser implements Parser {
       id: 'node_end',
       kind: 'end',
       label: 'End',
-      sourceLine: handler.offset + handler.body.split('\n').length - 1,
+      sourceLine: lastContentLine(handler.body, handler.offset),
     }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)

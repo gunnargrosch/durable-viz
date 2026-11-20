@@ -89,6 +89,7 @@ describe('RustParser', () => {
     assert.ok(start?.sourceLine, 'Start should have a source line')
     assert.ok(end?.sourceLine, 'End should have a source line')
     assert.ok(end!.sourceLine! > start!.sourceLine!, 'End should follow Start')
+    assert.equal(end!.sourceLine, 55, 'End should land on the last statement, not the closing brace')
   })
 
   it('generates valid edges', () => {
@@ -192,6 +193,10 @@ describe('RustParser', () => {
     const child = graph.nodes.find((n) => n.kind === 'runInChildContext')
     assert.ok(child)
     assert.equal(child.nestingType, 'FLAT')
+
+    const retry = graph.nodes.find((n) => n.kind === 'withRetry')
+    assert.ok(retry)
+    assert.equal(retry.nestingType, 'FLAT')
 
     const step = graph.nodes.find((n) => n.label === 'charge-payment')
     assert.ok(step)

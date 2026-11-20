@@ -5,7 +5,7 @@
 
 Static analysis for [AWS Lambda Durable Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html) workflows. Parses handler code and renders an interactive flowchart — no deployment or execution required.
 
-Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes. SDK versions covered: JS 3.0, Python 3.0, Java 3.x, .NET 2.x, Rust 0.2, and Go 1.0 (GA).
+Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes. SDK versions covered: JS 3.0, Python 3.0, Java 3.x, .NET 2.x, Rust 1.0 (GA), and Go 1.0 (GA).
 
 ## Quick Start
 

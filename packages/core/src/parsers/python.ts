@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs'
 import type { WorkflowNode, WorkflowBranch, WorkflowGraph } from '../graph.js'
 import { buildEdges, loopLabel } from '../graph.js'
 import type { Parser, ParseOptions } from '../parser.js'
+import { lastContentLine } from '../source-lines.js'
 import { basename } from 'node:path'
 
 let nodeCounter = 0
@@ -501,7 +502,7 @@ export class PythonParser implements Parser {
       id: 'node_end',
       kind: 'end',
       label: 'End',
-      sourceLine: handlerOffset + handlerBody.split('\n').length - 1,
+      sourceLine: lastContentLine(handlerBody, handlerOffset),
     }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)

@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.0] - 2026-11-20
+
+### Added
+
+- **Rust SDK GA (v1.0.0) support.** Updated the Rust examples, parser documentation, and generated handler for the GA crate. Generated handlers now use `durable::init_default_subscriber()?`, and flat child contexts and `with_retry` blocks emit `.virtual_context()`.
+- Rust parser detects `.virtual_context()` on `run_in_child_context` and `with_retry` and renders the node as flat, matching the virtual-context behavior of the GA SDK.
+
+### Changed
+
+- Updated the repo, CLI, and VS Code READMEs to list Rust 1.0 (GA) and the GA builder API.
+- Rust code generation emits the single type parameter of GA's `ctx.invoke::<O>(...)` and the two-argument `with_retry` closure required by the SDK.
+- The Rust examples use GA's `RetryDecision::retry(...)` constructor for non-exhaustive retry decisions.
+
+### Fixed
+
+- Clicking the End node navigated one row past the handler's last statement in every language: brace-delimited handlers landed on the closing brace (or a blank line before it), and Python landed on the blank line after the body. End now resolves to the last non-empty line inside the handler for TypeScript, Python, Java, C#, Rust, and Go (TypeScript uses the last statement's end line).
+
 ## [0.10.0] - 2026-11-16
 
 ### Added

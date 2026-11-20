@@ -772,7 +772,9 @@ export function generateRust(graph: WorkflowGraph): string {
 
   const needsDuration = graph.nodes.some((n) => n.kind === 'wait' || n.kind === 'waitForCondition')
   const needsBranch = graph.nodes.some((n) => n.kind === 'parallel' && n.branches?.length)
-  const needsNesting = graph.nodes.some((n) => n.nestingType === 'FLAT')
+  const needsNesting = graph.nodes.some((n) =>
+    (n.kind === 'parallel' || n.kind === 'map') && n.nestingType === 'FLAT'
+  )
   const needsCompletion = graph.nodes.some((n) => n.completionConfig)
   const needsSemantics = graph.nodes.some((n) => n.stepSemantics === 'AtMostOncePerRetry')
 
@@ -852,7 +854,7 @@ export function generateRust(graph: WorkflowGraph): string {
   lines.push('')
   lines.push('#[tokio::main]')
   lines.push('async fn main() -> Result<(), lambda_runtime::Error> {')
-  lines.push(`${IDENT}lambda_runtime::tracing::init_default_subscriber();`)
+  lines.push(`${IDENT}durable::init_default_subscriber()?;`)
   lines.push(`${IDENT}durable::run(handler).await`)
   lines.push('}')
   lines.push('')
@@ -882,7 +884,7 @@ function genRustNode(
     case 'invoke': {
       const funcRef = node.target ?? 'MyFunction'
       const tenant = node.tenantId ? `.tenant_id("${node.tenantId}")` : ''
-      return `${pad}let ${vname} = ctx.invoke::<serde_json::Value, _>("${funcRef}", serde_json::json!({}))${tenant}.name("${node.label}").await?;`
+      return `${pad}let ${vname} = ctx.invoke::<serde_json::Value>("${funcRef}", serde_json::json!({}))${tenant}.name("${node.label}").await?;`
     }
     case 'wait':
       return `${pad}ctx.wait(Duration::from_secs(1)).name("${node.label}").await?;`
@@ -915,9 +917,9 @@ function genRustNode(
       return `${pad}let ${vname} = ctx.map(vec![], |_child, _item, _idx| async move { Ok(()) })${modifiers}.name("${node.label}").await?;`
     }
     case 'withRetry':
-      return `${pad}let ${vname} = ctx.with_retry(|_ctx| async move { Ok(()) }).name("${node.label}").await?;`
+      return `${pad}let ${vname} = ctx.with_retry(|_child, _attempt| async move { Ok(()) })${node.nestingType === 'FLAT' ? '.virtual_context()' : ''}.name("${node.label}").await?;`
     case 'runInChildContext':
-      return `${pad}let ${vname} = ctx.run_in_child_context(|_child| async move { Ok(()) }).name("${node.label}").await?;`
+      return `${pad}let ${vname} = ctx.run_in_child_context(|_child| async move { Ok(()) })${node.nestingType === 'FLAT' ? '.virtual_context()' : ''}.name("${node.label}").await?;`
     case 'promiseAll':
       return `${pad}let ${vname} = ctx.try_join_all([\n${pad}${IDENT}// TODO: add operation futures (e.g. ctx.step(...).name("x").future())\n${pad}]).name("${node.label}").await?;`
     case 'promiseAny':

@@ -16,6 +16,6 @@ async fn handler(
 
 #[tokio::main]
 async fn main() -> Result<(), lambda_runtime::Error> {
-    lambda_runtime::tracing::init_default_subscriber();
+    durable::init_default_subscriber()?;
     durable::run(handler).await
 }

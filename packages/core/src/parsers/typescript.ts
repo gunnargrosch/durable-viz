@@ -836,11 +836,15 @@ export class TypeScriptParser implements Parser {
       label: 'Start',
       sourceLine: handlerArg.getStartLineNumber(),
     }
+    const statements = body.getStatements()
     const endNode: WorkflowNode = {
       id: 'node_end',
       kind: 'end',
       label: 'End',
-      sourceLine: body.getEndLineNumber(),
+      // Land on the last statement, not the handler's closing brace.
+      sourceLine: statements.length > 0
+        ? statements[statements.length - 1].getEndLineNumber()
+        : body.getStartLineNumber(),
     }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)

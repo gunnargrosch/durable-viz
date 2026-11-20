@@ -1,5 +1,5 @@
 /**
- * Rust parser for AWS Lambda Durable Execution SDK 0.2 (preview).
+ * Rust parser for AWS Durable Execution SDK for Rust 1.0 (GA).
  *
  * Uses regex-based parsing to find `durable::run(handler)` entry points and
  * extract the fluent builder API. The Rust SDK uses snake_case methods on
@@ -9,6 +9,7 @@
  *   ctx.step(|_| async { Ok(()) }).name("greet").await?
  *   ctx.wait(Duration::from_secs(1)).name("cooldown").await?
  *   ctx.parallel(branches).name("fanout").nesting(NestingMode::Flat).await?
+ *   ctx.run_in_child_context(body).name("child").virtual_context().await?
  *
  * Combinators are detected too: join_all, try_join_all, select_ok, race.
  */
@@ -17,6 +18,7 @@ import { readFileSync } from 'node:fs'
 import type { WorkflowNode, WorkflowBranch, WorkflowGraph } from '../graph.js'
 import { buildEdges, loopLabel } from '../graph.js'
 import type { Parser, ParseOptions } from '../parser.js'
+import { lastContentLine } from '../source-lines.js'
 import { basename } from 'node:path'
 
 let nodeCounter = 0
@@ -210,6 +212,10 @@ function extractRustConfig(chain: string): RustConfigFlags {
   const nesting = chain.match(/\.nesting\(\s*(?:\w+::)*NestingMode::(\w+)/)
   if (nesting) flags.nestingType = nesting[1] === 'Flat' ? 'FLAT' : 'NESTED'
 
+  // A virtual child context (or virtual with_retry block) writes no record of
+  // its own, which is the child-context equivalent of NestingMode::Flat.
+  if (/\.virtual_context\(\s*\)/.test(chain)) flags.nestingType = 'FLAT'
+
   if (/\.completion\(/.test(chain)) {
     const parts: string[] = []
     const min = chain.match(/\.min_successful\(\s*(\d+)/)
@@ -400,15 +406,18 @@ function extractNodes(
           if (config.maxConcurrency != null) node.maxConcurrency = config.maxConcurrency
         }
 
-        if (info.kind === 'runInChildContext') {
+        if (info.kind === 'runInChildContext' || info.kind === 'withRetry') {
           if (config.nestingType) node.nestingType = config.nestingType
-          if (config.subType) node.subType = config.subType
         }
 
         if (info.kind === 'step' || info.kind === 'withRetry') {
           if (config.stepSemantics) node.stepSemantics = config.stepSemantics
           if (config.retryStrategy) node.retryStrategy = config.retryStrategy
           if (config.subType) node.subType = config.subType
+        }
+
+        if (info.kind === 'runInChildContext' && config.subType) {
+          node.subType = config.subType
         }
 
         if (info.kind === 'createCallback' || info.kind === 'waitForCallback') {
@@ -477,7 +486,7 @@ export class RustParser implements Parser {
       id: 'node_end',
       kind: 'end',
       label: 'End',
-      sourceLine: handler.offset + handler.body.split('\n').length - 1,
+      sourceLine: lastContentLine(handler.body, handler.offset),
     }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)

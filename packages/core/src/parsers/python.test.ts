@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { PythonParser } from './python.js'
 
@@ -65,6 +66,12 @@ describe('PythonParser', () => {
     assert.ok(start?.sourceLine, 'Start should have a source line')
     assert.ok(end?.sourceLine, 'End should have a source line')
     assert.ok(end!.sourceLine! > start!.sourceLine!, 'End should follow Start')
+
+    // Python has no closing brace, so End must land on the last statement,
+    // not on a trailing blank line after it.
+    assert.equal(end!.sourceLine, 84, 'End should land on the last statement')
+    const lines = readFileSync(resolve(examplesDir, 'order_processor.py'), 'utf-8').split('\n')
+    assert.notEqual(lines[end!.sourceLine! - 1].trim(), '')
   })
 
   it('generates valid edges', () => {

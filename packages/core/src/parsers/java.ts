@@ -20,6 +20,7 @@ import { readFileSync } from 'node:fs'
 import type { WorkflowNode, WorkflowBranch, WorkflowGraph } from '../graph.js'
 import { buildEdges, loopLabel } from '../graph.js'
 import { parseCStyleLoopHead, cStyleLoopIterations, doWhileCondition } from './c-style-loops.js'
+import { lastContentLine } from '../source-lines.js'
 import type { Parser, ParseOptions } from '../parser.js'
 import { basename } from 'node:path'
 
@@ -525,7 +526,7 @@ export class JavaParser implements Parser {
       id: 'node_end',
       kind: 'end',
       label: 'End',
-      sourceLine: handlerOffset + handlerBody.split('\n').length - 1,
+      sourceLine: lastContentLine(handlerBody, handlerOffset),
     }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)

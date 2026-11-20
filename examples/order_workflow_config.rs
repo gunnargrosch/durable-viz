@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use aws_durable_execution_sdk as durable;
-use durable::builders::map_parallel::{CompletionConfig, NestingMode};
+use durable::builders::map_parallel::CompletionConfig;
 use durable::builders::wait_for_condition::WaitDecision;
 
 /// Processes an order end to end, exercising the config-level features:
@@ -24,9 +24,7 @@ async fn handler(
             if attempt >= 3 {
                 durable::RetryDecision::Stop
             } else {
-                durable::RetryDecision::Retry {
-                    delay: Duration::from_secs(1),
-                }
+                durable::RetryDecision::retry(Duration::from_secs(1))
             }
         })
         .semantics(durable::StepSemantics::AtMostOncePerRetry)
@@ -49,12 +47,12 @@ async fn handler(
 
     // A chained invoke of another durable function, tenant-isolated.
     let delegated = ctx
-        .invoke::<serde_json::Value, _>("fulfillment-service", serde_json::json!({ "order": event }))
+        .invoke::<serde_json::Value>("fulfillment-service", serde_json::json!({ "order": event }))
         .name("delegate-fulfillment")
         .tenant_id("tenant-abc-123")
         .await?;
 
-    // An isolated child context running in a flat (virtual) namespace.
+    // A virtual child context: it has its own namespace but writes no record.
     let summary = ctx
         .run_in_child_context(|child| async move {
             let value = child
@@ -64,14 +62,15 @@ async fn handler(
             Ok(value * 2)
         })
         .name("child-branch")
-        .nesting(NestingMode::Flat)
+        .virtual_context()
         .sub_type(durable::OperationSubType::new("Settlement").unwrap())
         .await?;
 
-    // A retry block wrapping a single step.
+    // A virtual retry block wrapping a single step.
     let retried = ctx
-        .with_retry(|_ctx, _attempt| async move { Ok("done".to_owned()) })
+        .with_retry(|_child, _attempt| async move { Ok("done".to_owned()) })
         .name("retry-block")
+        .virtual_context()
         .retry_strategy(|_err, _attempt| durable::RetryDecision::Stop)
         .await?;
 

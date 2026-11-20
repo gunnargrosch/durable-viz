@@ -8,7 +8,7 @@ Visualize and build [AWS Lambda Durable Functions](https://docs.aws.amazon.com/l
 - **View mode:** Parse handler code and render an interactive flowchart.
 - **Build mode:** Design workflows from scratch and generate handler boilerplate.
 
-Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes. SDK versions covered: JS 3.0, Python 3.0, Java 3.x, .NET 2.x, Rust 0.2, and Go 1.0 (GA).
+Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes. SDK versions covered: JS 3.0, Python 3.0, Java 3.x, .NET 2.x, Rust 1.0 (GA), and Go 1.0 (GA).
 
 ## Install
 

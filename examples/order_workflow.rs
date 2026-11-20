@@ -10,7 +10,7 @@ async fn handler(
     ctx: durable::DurableContext,
 ) -> Result<serde_json::Value, durable::BoxError> {
     let validated = ctx
-        .step(|_| async { Ok(event.get("orderId").cloned()) })
+        .step(move |_| async move { Ok(event.get("orderId").cloned()) })
         .name("validate-order")
         .await?;
 

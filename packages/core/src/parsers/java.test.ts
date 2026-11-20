@@ -80,6 +80,7 @@ describe('JavaParser', () => {
     assert.ok(start?.sourceLine, 'Start should have a source line')
     assert.ok(end?.sourceLine, 'End should have a source line')
     assert.ok(end!.sourceLine! > start!.sourceLine!, 'End should follow Start')
+    assert.equal(end!.sourceLine, 53, 'End should land on the last statement, not the closing brace')
   })
 
   it('generates valid edges', () => {

@@ -44,7 +44,7 @@ for (const [lang, stepCall, invokeCall, waitCall] of [
   ['python', 'context.step(func=lambda step_ctx: None, name="my-step"', 'context.invoke(function_name="MyFunc", payload={}, name="my-invoke"', 'context.wait(duration=Duration.from_seconds(30), name="my-wait"'],
   ['java', 'ctx.step("my-step", Object.class', 'ctx.invoke("my-invoke", "MyFunc", Object.class', 'ctx.wait("my-wait", Duration.ofSeconds(30))'],
   ['csharp', 'ctx.StepAsync', 'ctx.InvokeAsync<object, object>', 'ctx.WaitAsync'],
-  ['rust', 'ctx.step(|_| async { Ok(()) }).name("my-step")', 'ctx.invoke::<serde_json::Value, _>("MyFunc"', 'ctx.wait(Duration::from_secs(1)).name("my-wait")'],
+  ['rust', 'ctx.step(|_| async { Ok(()) }).name("my-step")', 'ctx.invoke::<serde_json::Value>("MyFunc"', 'ctx.wait(Duration::from_secs(1)).name("my-wait")'],
 ] as const) {
   const langStr = String(lang)
 
@@ -129,7 +129,18 @@ describe('Rust: combinators and modifiers', () => {
     assertContains(code, 'use aws_durable_execution_sdk as durable;')
     assertContains(code, 'async fn handler(')
     assertContains(code, '#[tokio::main]')
+    assertContains(code, 'durable::init_default_subscriber()?;')
     assertContains(code, 'durable::run(handler).await')
+  })
+
+  it('uses virtual_context for flat child contexts and with_retry blocks', () => {
+    const code = generateCode(makeGraph('test', [
+      makeNode('a', 'runInChildContext', 'child', { nestingType: 'FLAT' }),
+      makeNode('b', 'withRetry', 'retry', { nestingType: 'FLAT' }),
+    ]), { language: 'rust' })
+    assertContains(code, '.virtual_context()')
+    assertContains(code, 'ctx.with_retry(|_child, _attempt|')
+    assertNotContains(code, 'NestingMode')
   })
 
   it('promiseAll maps to try_join_all', () => {
