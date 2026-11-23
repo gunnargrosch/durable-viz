@@ -20,6 +20,7 @@ import type { WorkflowNode, WorkflowBranch, WorkflowGraph } from '../graph.js'
 import { buildEdges, loopLabel } from '../graph.js'
 import type { Parser, ParseOptions } from '../parser.js'
 import { lastContentLine } from '../source-lines.js'
+import { detectPythonOtel } from '../otel.js'
 import { basename } from 'node:path'
 
 let nodeCounter = 0
@@ -81,7 +82,7 @@ function findContextParam(handlerBody: string): string[] {
  */
 function extractHandlerBody(source: string): string | null {
   // Find @durable_execution decorator followed by def
-  const decoratorPattern = /@durable_execution\s*\n\s*def\s+(\w+)\s*\([^)]*\)[^:]*:/
+  const decoratorPattern = /@durable_execution(?:\s*\([\s\S]*?\))?\s*\n\s*def\s+(\w+)\s*\([^)]*\)[^:]*:/
   const match = decoratorPattern.exec(source)
   if (!match) return null
 
@@ -506,7 +507,8 @@ export class PythonParser implements Parser {
     }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)
+    const otel = detectPythonOtel(source, filePath)
 
-    return { name, nodes: allNodes, edges }
+    return { name, nodes: allNodes, edges, ...(otel ? { otel } : {}) }
   }
 }

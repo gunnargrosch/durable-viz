@@ -27,6 +27,7 @@ import {
 import type { WorkflowNode, WorkflowBranch, WorkflowGraph } from '../graph.js'
 import { buildEdges, loopLabel } from '../graph.js'
 import type { Parser, ParseOptions } from '../parser.js'
+import { detectTypeScriptOtel } from '../otel.js'
 
 // ---------------------------------------------------------------------------
 // ID generation (reset per parse call)
@@ -848,7 +849,8 @@ export class TypeScriptParser implements Parser {
     }
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)
+    const otel = detectTypeScriptOtel(sourceFile.getFullText(), filePath)
 
-    return { name, nodes: allNodes, edges }
+    return { name, nodes: allNodes, edges, ...(otel ? { otel } : {}) }
   }
 }

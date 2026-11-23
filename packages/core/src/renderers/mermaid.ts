@@ -3,6 +3,7 @@
  */
 
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../graph.js'
+import { isOtelOperation } from '../otel.js'
 
 export interface MermaidOptions {
   direction?: 'TD' | 'LR'
@@ -42,8 +43,9 @@ function wrapLabel(text: string, maxLineLength = 24): string {
   return lines.join('<br>')
 }
 
-function buildAnnotation(node: WorkflowNode): string {
+function buildAnnotation(node: WorkflowNode, otel: boolean): string {
   const parts: string[] = []
+  if (otel && isOtelOperation(node)) parts.push(`span ${esc(node.label)}`)
   if (node.nestingType === 'FLAT') parts.push('flat')
   if (node.completionConfig) parts.push(node.completionConfig)
   if (node.stepSemantics) parts.push(node.stepSemantics)
@@ -54,14 +56,14 @@ function buildAnnotation(node: WorkflowNode): string {
   return '<br>' + parts.join('<br>')
 }
 
-function shapeForKind(node: WorkflowNode): string {
+function shapeForKind(node: WorkflowNode, otel: boolean): string {
   const quoted = node.kind === 'loop' || node.kind === 'condition'
   const text = node.kind === 'loop'
     ? wrapLabel(escQuoted(node.label))
     : node.kind === 'condition'
       ? escQuoted(node.label)
       : esc(node.label)
-  const label = (quoted ? `"${text}${buildAnnotation(node)}"` : text + buildAnnotation(node))
+  const label = (quoted ? `"${text}${buildAnnotation(node, otel)}"` : text + buildAnnotation(node, otel))
   switch (node.kind) {
     case 'start':
     case 'end':
@@ -145,6 +147,14 @@ function styleForKind(node: WorkflowNode): string | undefined {
 export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): string {
   const direction = options?.direction ?? 'TD'
   const lines: string[] = [`graph ${direction}`]
+  if (graph.otel) {
+    const mode = graph.otel.environmentVariable
+      ? `selected by ${graph.otel.environmentVariable}${graph.otel.modes?.length ? ` (${graph.otel.modes.join(' or ')})` : ''}`
+      : graph.otel.mode === 'custom'
+        ? `custom registration${graph.otel.registration ? ` (${graph.otel.registration})` : ''}`
+        : `${graph.otel.mode} mode`
+    lines.push(`  %% OTel plugin: ${mode}, Workflow span "${graph.otel.workflowSpanName}"`)
+  }
 
   // Collect all nodes for styling and click callbacks
   const allNodes: WorkflowNode[] = []
@@ -160,11 +170,12 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
   graph.nodes.forEach((node, index) => {
     allNodes.push(node)
 
+    const otelEnabled = graph.otel != null
     const hasBranches = (node.kind === 'parallel' || node.kind === 'map') && node.branches?.length
 
     if (hasBranches) {
       // Emit the parallel/map hub node outside the subgraph
-      lines.push(`  ${node.id}${shapeForKind(node)}`)
+      lines.push(`  ${node.id}${shapeForKind(node, otelEnabled)}`)
 
       // Emit branch nodes inside a subgraph
       const subId = `sub_${node.id}`
@@ -173,7 +184,7 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
       for (const branch of node.branches!) {
         for (const bNode of branch.nodes) {
           allNodes.push(bNode)
-          lines.push(`    ${bNode.id}${shapeForKind(bNode)}`)
+          lines.push(`    ${bNode.id}${shapeForKind(bNode, otelEnabled)}`)
         }
       }
 
@@ -182,13 +193,13 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
       lines.push(subgraphStyle(subId))
     } else if (node.kind === 'loop') {
       // The loop header sits outside the subgraph, like a parallel hub
-      lines.push(`  ${node.id}${shapeForKind(node)}`)
+      lines.push(`  ${node.id}${shapeForKind(node, otelEnabled)}`)
       const bodyEnd = Math.min(index + Math.max(node.bodyCount ?? 1, 1), graph.nodes.length - 1)
       const subId = `sub_${node.id}`
       lines.push(`  subgraph ${subId}[" "]`)
       openLoops.push({ subId, endIndex: bodyEnd })
     } else {
-      lines.push(`  ${node.id}${shapeForKind(node)}`)
+      lines.push(`  ${node.id}${shapeForKind(node, otelEnabled)}`)
     }
 
     // Close every loop subgraph whose body ends at this node

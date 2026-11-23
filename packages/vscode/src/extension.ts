@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import { parseFile, renderMermaid } from '@durable-viz/core'
+import { otelModeLabel, parseFile, renderMermaid, renderOtelTree, type WorkflowOtel } from '@durable-viz/core'
 import { generateCode } from '@durable-viz/core'
 
 let currentPanel: vscode.WebviewPanel | undefined
@@ -92,14 +92,26 @@ function updatePanel(panel: vscode.WebviewPanel, filePath: string) {
     const graph = parseFile(filePath)
     const mermaid = renderMermaid(graph, { direction: currentDirection })
     panel.title = `Durable Viz: ${graph.name}`
-    panel.webview.html = buildWebviewHtml(mermaid, graph.name, JSON.stringify(graph, null, 2), currentDirection)
+    panel.webview.html = buildWebviewHtml(mermaid, graph.name, JSON.stringify(graph, null, 2), currentDirection, graph.otel, renderOtelTree(graph))
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     panel.webview.html = buildErrorHtml(message)
   }
 }
 
-function buildWebviewHtml(mermaid: string, title: string, graphJson: string, direction: 'TD' | 'LR'): string {
+function buildWebviewHtml(mermaid: string, title: string, graphJson: string, direction: 'TD' | 'LR', otel?: WorkflowOtel, otelTree?: string): string {
+  const otelDetail = otel
+    ? otel.environmentVariable
+      ? `${otel.environmentVariable}${otel.modes?.length ? ` (${otel.modes.join(' or ')})` : ''}`
+      : otel.mode
+    : ''
+  const otelTitle = otel
+    ? `${otel.sourceLine != null ? 'Go to OTel plugin registration' : 'OTel plugin'}: ${otelDetail}`
+    : ''
+  const otelBadge = otel
+    ? `<button class="otel-badge" id="otel-badge"${otel.sourceLine != null ? ` data-line="${otel.sourceLine}"` : ''} title="${otelTitle}">OTel: ${otelModeLabel(otel)}</button>`
+    : ''
+  const otelTab = otelTree ? '<button data-tab="otel">OTel</button>' : ''
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -128,6 +140,8 @@ function buildWebviewHtml(mermaid: string, title: string, graphJson: string, dir
     }
     .title { opacity: 0.7; }
     .title span { opacity: 1; font-weight: 600; }
+    .title .otel-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border: 1px solid var(--vscode-panel-border, #333); border-radius: 999px; background: transparent; color: inherit; font-family: inherit; font-size: 10px; font-weight: 500; line-height: inherit; opacity: 0.8; white-space: nowrap; cursor: pointer; }
+    .title .otel-badge:hover { border-color: var(--vscode-focusBorder, #007acc); opacity: 1; }
     .controls {
       display: flex;
       gap: 4px;
@@ -233,7 +247,7 @@ function buildWebviewHtml(mermaid: string, title: string, graphJson: string, dir
 </head>
 <body>
   <header>
-    <div class="title">durable-viz: <span>${title}</span></div>
+    <div class="title">durable-viz: <span>${title}</span>${otelBadge}</div>
     <div class="controls">
       <button id="zoom-out">-</button>
       <span id="zoom-level">100%</span>
@@ -253,6 +267,7 @@ ${mermaid}
     <div class="source-panel" id="source-panel">
       <div class="source-tabs">
         <button class="active" data-tab="mermaid">Mermaid</button>
+        ${otelTab}
         <button data-tab="json">JSON</button>
       </div>
       <div class="source-content" id="source-content"></div>
@@ -273,6 +288,13 @@ ${mermaid}
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 
     const vscode = acquireVsCodeApi();
+
+    const otelBadgeEl = document.getElementById('otel-badge');
+    if (otelBadgeEl && otelBadgeEl.dataset.line) {
+      otelBadgeEl.onclick = () => {
+        vscode.postMessage({ type: 'goToLine', line: Number(otelBadgeEl.dataset.line) });
+      };
+    }
 
     // Mermaid click callback - called when a node with a source line is clicked
     window.onNodeClick = function(line) {
@@ -416,6 +438,7 @@ ${mermaid}
 
     function getMermaidSource() { return mermaidRaw; }
     const jsonSource = document.getElementById('graph-json').textContent;
+    const otelSource = ${JSON.stringify(otelTree ?? '')};
     const sourcePanel = document.getElementById('source-panel');
     const sourceContent = document.getElementById('source-content');
     let activeTab = 'mermaid';
@@ -425,7 +448,7 @@ ${mermaid}
         document.querySelector('.source-tabs .active').classList.remove('active');
         btn.classList.add('active');
         activeTab = btn.dataset.tab;
-        sourceContent.textContent = activeTab === 'mermaid' ? getMermaidSource() : jsonSource;
+        sourceContent.textContent = activeTab === 'mermaid' ? getMermaidSource() : activeTab === 'otel' ? otelSource : jsonSource;
       };
     });
 
@@ -433,7 +456,7 @@ ${mermaid}
     toggleBtn.onclick = () => {
       const visible = sourcePanel.classList.toggle('visible');
       toggleBtn.textContent = visible ? 'Diagram' : 'Source';
-      if (visible) sourceContent.textContent = activeTab === 'mermaid' ? getMermaidSource() : jsonSource;
+      if (visible) sourceContent.textContent = activeTab === 'mermaid' ? getMermaidSource() : activeTab === 'otel' ? otelSource : jsonSource;
     };
 
     setTimeout(() => {

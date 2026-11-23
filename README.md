@@ -81,16 +81,19 @@ Try the included examples:
 npx durable-viz examples/order-workflow.ts --open
 npx durable-viz examples/order-workflow-config.ts --open
 npx durable-viz examples/order-batch-loop.ts --open
+npx durable-viz examples/order_workflow_otel.ts --open
 
 # Python
 npx durable-viz examples/order_processor.py --open
 npx durable-viz examples/order_processor_with_retry.py --open
 npx durable-viz examples/order_batch_loop.py --open
+npx durable-viz examples/order_processor_otel.py --open
 
 # Java
 npx durable-viz examples/OrderProcessor.java --open
 npx durable-viz examples/OrderProcessorFutures.java --open
 npx durable-viz examples/OrderBatchLoop.java --open
+npx durable-viz examples/OrderProcessorOtel.java --open
 
 # C# (.NET)
 npx durable-viz examples/OrderWorkflow.cs --open
@@ -274,6 +277,22 @@ The parser extracts configuration metadata and displays it as annotations on dia
 | Custom subtype (`subType`) | ✓ | ✓ | — | ✓ | ✓ | ✓ |
 | Concurrency limit (`maxConcurrency`) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
+### OpenTelemetry instrumentation
+
+When a handler registers the OpenTelemetry plugin in source, durable-viz marks the diagram with an `OTel` badge, adds the expected span name to each operation, and opens an OTel tab with the expected span tree. Click the badge to jump to the plugin registration in the handler. The tree includes the Workflow or Invocation root, operation spans, retry attempt spans, branch children, and warnings for unnamed or duplicate operation names.
+
+It detects the code-based registrations for the SDKs that ship an OTel plugin:
+
+| Runtime | Detected registrations |
+| --- | --- |
+| TypeScript / JavaScript | `createOtelPluginFactory()`, `createExecutionOtelPluginFactory()`, `createInvocationOtelPluginFactory()`, including helpers such as `plugins: loadOtelPlugins()` |
+| Python | `create_otel_plugin_factory()`, `ExecutionOtelPluginFactory`, `InvocationOtelPluginFactory`, and their exported singleton factories, including helpers |
+| Java | `OtelPlugin.factory()`, `ExecutionOtelPlugin.factory()`, `InvocationOtelPlugin.factory()`, including helper methods passed to `withPlugins()` |
+
+For TypeScript/JavaScript and Python, durable-viz follows imported helper files. For Java, it follows helper methods in the same file and imported helper classes. A helper such as `plugins: loadOtelPlugins()` reports the modes it can select and the environment variable that chooses between them.
+
+Durable-viz reads the handler source and imported helpers only. A plugin selected through `DURABLE_EXECUTION_PLUGINS`, a Lambda layer, or deployment configuration does not show up unless the handler code references the plugin. When a helper selects the mode at runtime, the badge shows `OTel: env`, its tooltip names the environment variable and the modes it can choose, and the OTel tab lists the operation spans without assuming the Workflow or Invocation root.
+
 ### Visual Encoding
 
 Each primitive type has a distinct shape and color in the diagram:
@@ -343,12 +362,15 @@ The `examples/` directory contains sample handlers for each language:
 | `order-workflow.ts` | TypeScript | step, parallel, invoke, waitForCallback, condition |
 | `order-workflow-config.ts` | TypeScript | step, parallel, map, invoke, runInChildContext, withRetry, config features |
 | `order-batch-loop.ts` | TypeScript | step, wait, waitForCallback, condition, loop |
+| `order_workflow_otel.ts` | TypeScript | step, waitForCallback, OTel plugin registration |
 | `order_processor.py` | Python | step, wait, create_callback, invoke, condition |
 | `order_processor_with_retry.py` | Python | step, parallel, map, invoke, withRetry, config features |
 | `order_batch_loop.py` | Python | step, wait, waitForCallback, condition, loop |
+| `order_processor_otel.py` | Python | step, waitForCallback, OTel plugin registration |
 | `OrderProcessor.java` | Java | step, parallel, wait, invoke, waitForCallback, condition |
 | `OrderProcessorFutures.java` | Java | step, parallel, map, invoke, runInChildContext, withRetry, allOf, anyOf, config features |
 | `OrderBatchLoop.java` | Java | step, wait, waitForCallback, condition, loop |
+| `OrderProcessorOtel.java` | Java | step, wait, waitForCallback, OTel plugin registration |
 | `OrderWorkflow.cs` | C# | step, parallel, wait, waitForCallback, condition |
 | `OrderProcessor.cs` | C# | step, parallel, wait, invoke, waitForCallback, condition |
 | `OrderBatchLoop.cs` | C# | step, wait, waitForCallback, condition, loop |

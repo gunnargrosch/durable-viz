@@ -13,5 +13,7 @@ export type {
   WorkflowBranch,
   WorkflowEdge,
   NodeKind,
+  WorkflowOtel,
 } from './graph.js'
 export { buildEdges } from './graph.js'
+export { renderOtelTree, isOtelOperation, otelModeLabel } from './otel.js'

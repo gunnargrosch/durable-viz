@@ -83,6 +83,14 @@ describe('JavaParser', () => {
     assert.equal(end!.sourceLine, 53, 'End should land on the last statement, not the closing brace')
   })
 
+  it('detects the OpenTelemetry plugin registration', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'OtelPluginExample.java'))
+
+    assert.equal(graph.otel?.mode, 'invocation')
+    assert.equal(graph.otel?.source, 'code')
+    assert.equal(graph.otel?.sourceLine, 12)
+  })
+
   it('generates valid edges', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessor.java'))
 

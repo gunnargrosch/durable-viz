@@ -80,10 +80,36 @@ export interface WorkflowEdge {
   style?: 'back'
 }
 
+/**
+ * OpenTelemetry instrumentation detected in the handler source.
+ *
+ * Durable-viz only reads the source file. A plugin loaded through a Lambda
+ * layer, `DURABLE_EXECUTION_PLUGINS`, or deployment configuration does not
+ * appear here.
+ */
+export interface WorkflowOtel {
+  /** Span view selected by the plugin factory, or `custom` for a helper. */
+  mode: 'execution' | 'invocation' | 'custom'
+  /** Name of the span that covers the whole execution. */
+  workflowSpanName: string
+  /** Where the plugin registration was found. */
+  source: 'code'
+  /** Plugin expression passed to the handler options, for example loadOtelPlugins(). */
+  registration?: string
+  /** 1-based line of the plugin registration in the handler source. */
+  sourceLine?: number
+  /** Modes a helper can select at runtime. Present when it chooses between views. */
+  modes?: Array<'execution' | 'invocation'>
+  /** Environment variable that selects the mode, when found in a helper. */
+  environmentVariable?: string
+}
+
 export interface WorkflowGraph {
   name: string
   nodes: WorkflowNode[]
   edges: WorkflowEdge[]
+  /** Present when the handler registers an OpenTelemetry plugin in source. */
+  otel?: WorkflowOtel
 }
 
 /** Build the display label for a loop node. */

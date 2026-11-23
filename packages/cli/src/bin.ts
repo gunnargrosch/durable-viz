@@ -3,7 +3,7 @@ import { resolve, basename } from 'node:path'
 import { tmpdir } from 'node:os'
 import { writeFileSync, readFileSync } from 'node:fs'
 import { exec, execSync } from 'node:child_process'
-import { parseFile, renderMermaid } from '@durable-viz/core'
+import { otelModeLabel, parseFile, renderMermaid, renderOtelTree, type WorkflowOtel } from '@durable-viz/core'
 import { version } from '../package.json'
 
 function isWSL(): boolean {
@@ -43,7 +43,14 @@ function openInBrowser(filePath: string): void {
   }
 }
 
-function buildHtml(mermaid: string, title: string, graphJson: string): string {
+function buildHtml(mermaid: string, title: string, graphJson: string, otel?: WorkflowOtel, otelTree?: string): string {
+  const otelDetail = otel
+    ? otel.environmentVariable
+      ? `${otel.environmentVariable}${otel.modes?.length ? ` (${otel.modes.join(' or ')})` : ''}`
+      : otel.mode
+    : ''
+  const otelBadge = otel ? `<span class="otel-badge" title="OTel plugin: ${otelDetail}">OTel: ${otelModeLabel(otel)}</span>` : ''
+  const otelTab = otelTree ? '<button data-tab="otel">OTel</button>' : ''
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -74,6 +81,7 @@ function buildHtml(mermaid: string, title: string, graphJson: string): string {
       color: #94a3b8;
     }
     h1 span { color: #e2e8f0; }
+    .otel-badge { display: inline-block; margin-left: 0.6rem; padding: 0.15rem 0.45rem; border: 1px solid #334155; border-radius: 999px; color: #94a3b8; font-size: 0.7rem; font-weight: 500; white-space: nowrap; }
     .controls {
       display: flex;
       gap: 0.5rem;
@@ -178,7 +186,7 @@ function buildHtml(mermaid: string, title: string, graphJson: string): string {
 </head>
 <body>
   <header>
-    <h1>durable-viz: <span>${title}</span></h1>
+    <h1>durable-viz: <span>${title}</span>${otelBadge}</h1>
     <div class="controls">
       <button id="zoom-out">-</button>
       <span id="zoom-level">100%</span>
@@ -198,6 +206,7 @@ ${mermaid}
     <div class="source-panel" id="source-panel">
       <div class="source-tabs">
         <button class="active" data-tab="mermaid">Mermaid</button>
+        ${otelTab}
         <button data-tab="json">JSON</button>
       </div>
       <div class="source-content" id="source-content"></div>
@@ -350,6 +359,7 @@ ${mermaid}
 
     function getMermaidSource() { return mermaidRaw; }
     const jsonSource = document.getElementById('graph-json').textContent;
+    const otelSource = ${JSON.stringify(otelTree ?? '')};
     const sourcePanel = document.getElementById('source-panel');
     const sourceContent = document.getElementById('source-content');
     let activeTab = 'mermaid';
@@ -359,7 +369,7 @@ ${mermaid}
         document.querySelector('.source-tabs .active').classList.remove('active');
         btn.classList.add('active');
         activeTab = btn.dataset.tab;
-        sourceContent.textContent = activeTab === 'mermaid' ? getMermaidSource() : jsonSource;
+        sourceContent.textContent = activeTab === 'mermaid' ? getMermaidSource() : activeTab === 'otel' ? otelSource : jsonSource;
       };
     });
 
@@ -367,7 +377,7 @@ ${mermaid}
     toggleBtn.onclick = () => {
       const visible = sourcePanel.classList.toggle('visible');
       toggleBtn.textContent = visible ? 'Diagram' : 'Source';
-      if (visible) sourceContent.textContent = activeTab === 'mermaid' ? getMermaidSource() : jsonSource;
+      if (visible) sourceContent.textContent = activeTab === 'mermaid' ? getMermaidSource() : activeTab === 'otel' ? otelSource : jsonSource;
     };
 
     setTimeout(() => {
@@ -404,7 +414,7 @@ const program = new Command()
 
       if (options.open) {
         const title = options.name ?? basename(filePath, '.ts')
-        const html = buildHtml(mermaid, title, JSON.stringify(graph, null, 2))
+        const html = buildHtml(mermaid, title, JSON.stringify(graph, null, 2), graph.otel, renderOtelTree(graph))
         const tmpPath = resolve(getTempDir(), `durable-viz-${Date.now()}.html`)
         writeFileSync(tmpPath, html)
         openInBrowser(tmpPath)
