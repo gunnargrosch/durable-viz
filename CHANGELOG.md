@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.1] - 2026-11-23
+
+### Changed
+
+- Removed the per-node `span <name>` annotation from diagrams. Named operations already show the span name in the node label. The OTel tab keeps the span tree, attempt spans, branch children, and warnings for unnamed or duplicate names.
+- Updated the repo, CLI, and VS Code READMEs to describe the badge and OTel tab without the redundant node annotation.
+
 ## [0.12.0] - 2026-11-23
 
 ### Added
