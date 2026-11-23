@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.0] - 2026-11-23
+
+### Added
+
+- **OpenTelemetry detection.** TypeScript/JavaScript, Python, and Java handlers that register the OTel plugin now show an `OTel` badge, a `span <name>` annotation on each operation, and an OTel tab with the expected span tree. The tree includes the Workflow or Invocation root, attempt spans, branch children, and warnings for unnamed or duplicate operation names.
+- Imported helper resolution. TypeScript/JavaScript and Python follow imported helper files. Java follows same-file helper methods and imported helper classes. When a helper selects the view at runtime, the badge shows `OTel: env` and its tooltip names the environment variable and possible modes.
+- New examples: `order_workflow_otel.ts`, `order_processor_otel.py`, and `OrderProcessorOtel.java`.
+
+### Changed
+
+- The OTel badge navigates to the plugin registration line in the handler.
+- Updated the repo, CLI, and VS Code READMEs with OTel detection, helper resolution, and the badge behavior.
+
+### Fixed
+
+- The OTel badge label no longer wraps inside the pill in a narrow panel.
+
 ## [0.11.0] - 2026-11-20
 
 ### Added
