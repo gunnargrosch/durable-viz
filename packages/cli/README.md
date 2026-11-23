@@ -77,7 +77,7 @@ Go (GA v1.0) also supports `durable.ParallelMixed()` with its `NewTypedBranch` b
 
 TypeScript, Python, C#, Rust, and Go custom operation subtypes (`subType` / `sub_type` / `SubType` / `WithStepSubType` / `.sub_type(...)`) are shown as annotations on the diagram.
 
-Handlers that register the OpenTelemetry plugin in source get an OTel badge, span-name annotations, and an OTel tab with the expected span tree. Detection covers TypeScript/JavaScript, Python, and Java, and follows helper functions in imported files. When a helper picks the mode at runtime, the badge shows `OTel: env` and the tooltip names the environment variable and its possible modes.
+Handlers that register the OpenTelemetry plugin in source get an OTel badge and an OTel tab with the expected span tree. Detection covers TypeScript/JavaScript, Python, and Java, and follows helper functions in imported files. When a helper picks the mode at runtime, the badge shows `OTel: env` and the tooltip names the environment variable and its possible modes.
 
 ## Visual Encoding
 

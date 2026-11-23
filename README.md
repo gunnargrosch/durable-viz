@@ -279,7 +279,7 @@ The parser extracts configuration metadata and displays it as annotations on dia
 
 ### OpenTelemetry instrumentation
 
-When a handler registers the OpenTelemetry plugin in source, durable-viz marks the diagram with an `OTel` badge, adds the expected span name to each operation, and opens an OTel tab with the expected span tree. Click the badge to jump to the plugin registration in the handler. The tree includes the Workflow or Invocation root, operation spans, retry attempt spans, branch children, and warnings for unnamed or duplicate operation names.
+When a handler registers the OpenTelemetry plugin in source, durable-viz marks the diagram with an `OTel` badge and opens an OTel tab with the expected span tree. Click the badge to jump to the plugin registration in the handler. The tree includes the Workflow or Invocation root, operation spans, retry attempt spans, branch children, and warnings for unnamed or duplicate operation names.
 
 It detects the code-based registrations for the SDKs that ship an OTel plugin:
 

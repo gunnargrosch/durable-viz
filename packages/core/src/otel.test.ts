@@ -107,7 +107,7 @@ describe('OpenTelemetry detection', () => {
 
     assert.equal(graph.otel, undefined)
     assert.equal(renderOtelTree(graph), undefined)
-    assert.ok(!renderMermaid(graph).includes('span load-order'))
+    assert.ok(!renderMermaid(graph).includes('span'))
   })
 
   it('renders the expected span tree', () => {
@@ -123,13 +123,13 @@ describe('OpenTelemetry detection', () => {
     assert.match(tree, /waitForCallback "manager-approval"/)
   })
 
-  it('adds span names and the plugin mode to the Mermaid output', () => {
+  it('adds the plugin mode to the Mermaid output without repeating span names', () => {
     const graph = parseFile(resolve(examplesDir, 'order_workflow_otel.ts'))
     const mermaid = renderMermaid(graph)
 
     assert.match(mermaid, /%% OTel plugin: invocation mode, Workflow span "OrderWorkflow"/)
-    assert.match(mermaid, /span load-order/)
-    assert.match(mermaid, /span manager-approval/)
+    assert.ok(!mermaid.includes('span load-order'))
+    assert.ok(!mermaid.includes('span manager-approval'))
   })
 
   it('warns about unnamed and duplicate operation names', () => {
