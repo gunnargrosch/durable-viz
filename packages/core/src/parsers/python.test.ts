@@ -97,6 +97,30 @@ describe('PythonParser', () => {
     assert.ok(!topLevelSteps.includes('retry-step'))
   })
 
+  it('parses microvm and microvm_session calls with session jobs', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'microvm.py'))
+
+    const microvms = graph.nodes.filter((n) => n.kind === 'microvm')
+    assert.deepEqual(microvms.map((n) => [n.label, n.subType]), [
+      ['build', 'Microvm'],
+      ['pipeline', 'MicrovmSession'],
+    ])
+
+    const session = microvms.find((n) => n.subType === 'MicrovmSession')
+    assert.ok(session?.children)
+    assert.deepEqual(session.children.map((n) => [n.label, n.kind, n.subType]), [
+      ['write', 'microvm', 'MicrovmSessionJob'],
+      ['pause', 'wait', undefined],
+      ['read', 'microvm', 'MicrovmSessionJob'],
+    ])
+
+    const internal = session.children.filter((n) =>
+      ['callback', 'launch', 'request', 'terminate'].includes(n.label)
+    )
+    assert.equal(internal.length, 0, 'Extension internals should not appear as user operations')
+    assert.ok(!graph.nodes.some((n) => n.kind === 'wait' && n.label === 'pause'), 'Session operations should not leak to the top level')
+  })
+
   it('generates valid edges', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'order_processor.py'))
 

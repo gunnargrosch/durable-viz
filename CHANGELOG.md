@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.0] - 2026-11-26
+
+### Added
+
+- **Lambda MicroVM extension support for TypeScript/JavaScript and Python.** The diagram shows `microvm` calls as one job, `microvmSession` calls as a container, and each `vm.invoke` as a MicroVM job inside the session. The session handler's normal durable operations appear in the same container. Import aliases and named session handlers are resolved.
+- TypeScript/JavaScript also detects `microvm` calls inside `context.map` callbacks, so each dynamic branch can show its own MicroVM job.
+- A MicroVM node kind with a card icon, Mermaid shape, VS Code Build mode palette entry, and codegen placeholders.
+- MicroVM examples for TypeScript and Python.
+
+### Changed
+
+- MicroVM cards use the kind label to name the role: `MicroVM`, `MicroVM session`, or `MicroVM job`. The internal subtype line is hidden from those cards.
+
+### Fixed
+
+- The Python parser no longer matches `context.wait()` inside names such as `session_context.wait()`.
+- The Python parser no longer inlines a nested helper at its `def` line.
+
 ## [0.14.1] - 2026-11-26
 
 ### Fixed

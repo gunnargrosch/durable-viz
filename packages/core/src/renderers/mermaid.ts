@@ -3,7 +3,7 @@
  */
 
 import { buildEdges, type WorkflowGraph, type WorkflowNode, type WorkflowEdge } from '../graph.js'
-import { CARD_KIND_LABEL, cardGroupForKind, cardIconForKind } from './card-theme.js'
+import { cardGroupForKind, cardIconForKind, cardKindLabel } from './card-theme.js'
 
 export interface MermaidOptions {
   direction?: 'TD' | 'LR'
@@ -62,7 +62,9 @@ function buildAnnotation(node: WorkflowNode): string {
 }
 
 function buildCardMeta(node: WorkflowNode): string {
-  const parts = buildAnnotation(node).split('<br>').filter(Boolean)
+  const parts = buildAnnotation(node).split('<br>').filter((part) =>
+    part && !(node.kind === 'microvm' && part.startsWith('subtype '))
+  )
   return parts.length ? `<span class='dv-meta'>${parts.join(' · ')}</span>` : ''
 }
 
@@ -74,7 +76,7 @@ function cardShape(node: WorkflowNode): string {
   const icon = cardIconForKind(node.kind)
   const iconHtml = icon ? `<span class='dv-icon dv-i-${icon}'></span>` : ''
   const name = escQuoted(node.label)
-  const kindLabel = CARD_KIND_LABEL[node.kind]
+  const kindLabel = cardKindLabel(node)
   return `["<div class='dv-card'>${iconHtml}<span class='dv-text'><span class='dv-kind'>${kindLabel}</span><span class='dv-name'>${name}</span>${buildCardMeta(node)}</span></div>"]`
 }
 
@@ -108,6 +110,7 @@ function shapeForKind(node: WorkflowNode): string {
       return `((${label}))`
     case 'runInChildContext':
     case 'withRetry':
+    case 'microvm':
       return `[[${label}]]`
     case 'condition':
       return `{${label}}`
@@ -167,6 +170,8 @@ function styleForKind(node: WorkflowNode): string | undefined {
     case 'runInChildContext':
     case 'withRetry':
       return `style ${node.id} fill:#4a849e,stroke:#3d6d83,color:#deedf3`
+    case 'microvm':
+      return `style ${node.id} fill:#9b573c,stroke:#7d4630,color:#f7e7df`
     case 'condition':
       return `style ${node.id} fill:#6b71a8,stroke:#575c8a,color:#e3e4f0`
     case 'loop':

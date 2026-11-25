@@ -811,6 +811,7 @@ function buildBuildHtml(): string {
       <div class="palette-item condition" draggable="true" data-kind="condition" data-label="condition" data-langs="typescript python java csharp rust go">🔵 Condition</div>
       <div class="palette-item" draggable="true" data-kind="withRetry" data-label="retry" data-langs="typescript python java rust go">🩵 With Retry</div>
       <div class="palette-item" draggable="true" data-kind="runInChildContext" data-label="child" data-langs="typescript python java csharp rust go">🩵 Child Context</div>
+      <div class="palette-item" draggable="true" data-kind="microvm" data-label="microvm" data-langs="typescript python">🟤 MicroVM</div>
       <div class="palette-item" draggable="true" data-kind="promiseAll" data-label="join-all" data-langs="typescript rust go">🟣 Join All</div>
       <div class="palette-item" draggable="true" data-kind="promiseAny" data-label="select-ok" data-langs="typescript rust go">🟣 Any</div>
       <div class="palette-item" draggable="true" data-kind="promiseRace" data-label="race" data-langs="typescript rust go">🟣 Race</div>
@@ -939,6 +940,10 @@ function buildBuildHtml(): string {
         {
           selector: 'node[kind="runInChildContext"], node[kind="withRetry"]',
           style: { 'background-color': '#4a849e', 'color': '#deedf3', 'shape': 'round-rectangle' }
+        },
+        {
+          selector: 'node[kind="microvm"]',
+          style: { 'background-color': '#9b573c', 'color': '#f7e7df', 'shape': 'round-rectangle' }
         },
         {
           selector: 'node.drag-ghost',
@@ -1525,6 +1530,7 @@ function buildBuildHtml(): string {
           case 'wait': case 'waitForCallback': case 'createCallback': case 'waitForCondition': shape = '((' + label + '))'; break;
           case 'condition': shape = '{' + label + '}'; break;
           case 'runInChildContext': case 'withRetry': shape = '[[' + label + ']]'; break;
+          case 'microvm': shape = '[[' + label + ']]'; break;
           case 'promiseAll': case 'promiseAny': case 'promiseRace': case 'promiseAllSettled': shape = '{{' + label + '}}'; break;
           default: shape = '[' + label + ']';
         }

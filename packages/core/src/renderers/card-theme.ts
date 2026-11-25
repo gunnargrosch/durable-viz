@@ -6,7 +6,7 @@
  *   --dv-bg, --dv-card, --dv-border, --dv-fg, --dv-muted, --dv-edge
  */
 
-import type { NodeKind } from '../graph.js'
+import type { NodeKind, WorkflowNode } from '../graph.js'
 
 export type CardGroup =
   | 'terminal'
@@ -18,6 +18,7 @@ export type CardGroup =
   | 'child'
   | 'condition'
   | 'loop'
+  | 'microvm'
 
 export const CARD_GROUP_ACCENT: Record<CardGroup, string> = {
   terminal: '#e8c547',
@@ -29,6 +30,7 @@ export const CARD_GROUP_ACCENT: Record<CardGroup, string> = {
   child: '#4a9bbd',
   condition: '#7c84d4',
   loop: '#9aab45',
+  microvm: '#c06c4a',
 }
 
 export function cardGroupForKind(kind: NodeKind): CardGroup {
@@ -60,6 +62,8 @@ export function cardGroupForKind(kind: NodeKind): CardGroup {
       return 'condition'
     case 'loop':
       return 'loop'
+    case 'microvm':
+      return 'microvm'
   }
 }
 
@@ -82,6 +86,17 @@ export const CARD_KIND_LABEL: Record<NodeKind, string> = {
   promiseAllSettled: 'Promise.allSettled',
   condition: 'Condition',
   loop: 'Loop',
+  microvm: 'MicroVM',
+}
+
+/** User-facing kind label. MicroVM nodes use their role instead of the raw subtype. */
+export function cardKindLabel(node: WorkflowNode): string {
+  if (node.kind === 'microvm') {
+    if (node.subType === 'MicrovmSession') return 'MicroVM session'
+    if (node.subType === 'MicrovmSessionJob') return 'MicroVM job'
+    return 'MicroVM'
+  }
+  return CARD_KIND_LABEL[node.kind]
 }
 
 /** Inner SVG markup (24x24 viewBox, stroke only) per icon. */
@@ -95,6 +110,7 @@ const ICON_PATHS = {
   retry: "<path d='M20 12a8 8 0 10-3 6.2'/><path d='M20 5v5h-5'/>",
   condition: "<path d='M12 3l9 9-9 9-9-9z'/>",
   loop: "<path d='M17 4l3 3-3 3'/><path d='M4 11V9a2 2 0 012-2h16'/><path d='M7 20l-3-3 3-3'/><path d='M20 13v2a2 2 0 01-2 2H2'/>",
+  microvm: "<rect x='3' y='4' width='18' height='16' rx='2'/><rect x='7' y='8' width='10' height='8' rx='1'/><path d='M9 8V6M12 8V6M15 8V6M9 18v-2M12 18v-2M15 18v-2'/>",
 } as const
 
 type IconName = keyof typeof ICON_PATHS
@@ -185,6 +201,7 @@ const LEGEND_ENTRIES: { group: CardGroup; icon: IconName | undefined; label: str
   { group: 'condition', icon: 'condition', label: 'Condition' },
   { group: 'loop', icon: 'loop', label: 'Loop' },
   { group: 'child', icon: 'child', label: 'Child Context' },
+  { group: 'microvm', icon: 'microvm', label: 'MicroVM' },
 ]
 
 /** Legend items, one per accent group, drawn with the same icons as the nodes. */

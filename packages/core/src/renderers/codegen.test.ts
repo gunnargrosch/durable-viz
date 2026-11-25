@@ -1102,3 +1102,14 @@ describe('Go code generation', () => {
     assertContains(code, 'durable.WithSemantics(durable.AtMostOncePerRetry)', 'durable.WithTenantID("tenant-001")', 'durable.WaitForCondition[any]')
   })
 })
+
+describe('MicroVM code generation', () => {
+  it('emits a TODO comment in TypeScript and Python', () => {
+    const graph = makeGraph('microvm', [
+      makeNode('a', 'microvm', 'build', { subType: 'Microvm' }),
+    ])
+
+    assertContains(generateCode(graph, { language: 'typescript' }), '// TODO: build runs in a MicroVM (Microvm)')
+    assertContains(generateCode(graph, { language: 'python' }), '# TODO: build runs in a MicroVM (Microvm)')
+  })
+})

@@ -161,6 +161,56 @@ describe('TypeScriptParser', () => {
     assert.equal(child?.subType, 'Settlement')
   })
 
+  it('parses microvm and microvmSession calls with session jobs', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'microvm.ts'))
+
+    const microvms = graph.nodes.filter((n) => n.kind === 'microvm')
+    assert.deepEqual(microvms.map((n) => [n.label, n.subType]), [
+      ['build', 'Microvm'],
+      ['pipeline', 'MicrovmSession'],
+    ])
+
+    const session = microvms.find((n) => n.subType === 'MicrovmSession')
+    assert.ok(session?.children)
+    assert.deepEqual(session.children.map((n) => [n.label, n.kind, n.subType]), [
+      ['write', 'microvm', 'MicrovmSessionJob'],
+      ['wait: pause', 'wait', undefined],
+      ['read', 'microvm', 'MicrovmSessionJob'],
+    ])
+
+    const internal = session.children.filter((n) =>
+      ['callback', 'launch', 'request', 'terminate'].includes(n.label)
+    )
+    assert.equal(internal.length, 0, 'Extension internals should not appear as user operations')
+    assert.ok(!graph.nodes.some((n) => n.kind === 'wait' && n.label === 'wait: pause'), 'Session operations should not leak to the top level')
+  })
+
+  it('resolves a named microvmSession handler and aliased imports', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'microvm-handler-ref.ts'))
+
+    const session = graph.nodes.find((n) => n.kind === 'microvm')
+    assert.ok(session)
+    assert.equal(session.label, 'ci-pipeline')
+    assert.equal(session.subType, 'MicrovmSession')
+    assert.deepEqual(session.children?.map((n) => [n.label, n.subType]), [
+      ['build', 'MicrovmSessionJob'],
+      ['wait: cool-down', undefined],
+      ['test', 'MicrovmSessionJob'],
+    ])
+  })
+
+  it('parses a microvm call inside a map callback', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'microvm-map.ts'))
+
+    const map = graph.nodes.find((n) => n.kind === 'map')
+    assert.ok(map?.branches)
+    assert.equal(map.branches.length, 1)
+    assert.equal(map.branches[0].dynamic, true)
+    assert.deepEqual(map.branches[0].nodes.map((n) => [n.kind, n.label, n.subType]), [
+      ['microvm', 'build-?', 'Microvm'],
+    ])
+  })
+
   it('detects nestingType on parallel node', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'order-workflow-config.ts'))
 

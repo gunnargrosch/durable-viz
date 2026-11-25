@@ -24,6 +24,7 @@ export type NodeKind =
   | 'promiseAllSettled'
   | 'condition'
   | 'loop'
+  | 'microvm'
 
 export interface WorkflowNode {
   id: string
@@ -53,7 +54,7 @@ export interface WorkflowNode {
   stepSemantics?: string
   /** Tenant ID for multi-tenant invoke operations. */
   tenantId?: string
-  /** Custom operation subtype (e.g. "OrderCharge") recorded by the SDK. */
+  /** Custom operation subtype (e.g. "OrderCharge") or MicroVM role ("Microvm", "MicrovmSession", "MicrovmSessionJob"). */
   subType?: string
   /** Concurrency limit for parallel/map nodes (e.g. maxConcurrency, max_concurrency). */
   maxConcurrency?: number

@@ -52,11 +52,13 @@ Try the included examples:
 # TypeScript
 npx durable-viz examples/order-workflow.ts --open
 npx durable-viz examples/order-workflow-config.ts --open
+npx durable-viz examples/microvm.ts --open
 npx durable-viz examples/order-batch-loop.ts --open
 npx durable-viz examples/order_workflow_otel.ts --open
 
 # Python
 npx durable-viz examples/order_processor.py --open
+npx durable-viz examples/microvm.py --open
 npx durable-viz examples/order_processor_with_retry.py --open
 npx durable-viz examples/order_batch_loop.py --open
 npx durable-viz examples/order_processor_otel.py --open
@@ -159,7 +161,7 @@ Generated code opens in a new editor tab. The palette language selector filters 
 
 | Feature | Description |
 | --- | --- |
-| **Drag-and-drop palette** | 15 durable primitives, filtered by language (TS/Python/Java/C#/Rust/Go) |
+| **Drag-and-drop palette** | 16 durable primitives, filtered by language (TS/Python/Java/C#/Rust/Go) |
 | **Interactive canvas** | Click-to-connect edges, drag to reposition nodes |
 | **Compound nodes** | Parallel and Map nodes can contain child branches |
 | **Inline rename** | Double-click any node to rename in-place (no prompt dialogs) |
@@ -227,8 +229,11 @@ The parser detects all durable execution SDK primitives.
 | Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | `ctx.waitForCondition()` | `ctx.WaitForConditionAsync()` | `ctx.wait_for_condition()` | `durable.WaitForCondition()` |
 | Child Context | `context.runInChildContext()` | `context.run_in_child_context()` | `ctx.runInChildContext()` | `ctx.RunInChildContextAsync()` | `ctx.run_in_child_context()` | `durable.RunInChildContext()` |
 | With Retry | `withRetry(context, ...)` | `with_retry(context, ...)` | `ctx.withRetry(...)` | via `StepConfig` | `ctx.with_retry()` | `durable.Retry()` |
+| MicroVM | `microvm()`, `microvmSession()` | `microvm()`, `microvm_session()` | — | — | — | — |
 
-TypeScript also detects `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`.
+TypeScript also detects `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`, plus `microvm` calls inside `context.map` callbacks.
+
+TypeScript/JavaScript and Python also detect the MicroVM extension operations. `microvm` is one job in a new MicroVM. `microvmSession` is one MicroVM shared by several `vm.invoke` jobs, drawn as a container with the session handler's operations inside it. The extension's internal callback, launch, request, and terminate steps are hidden.
 
 Java also detects `DurableFuture.allOf(futures...)` and `DurableFuture.anyOf(futures...)` as promise combinators, plus the async operation variants (`stepAsync`, `waitAsync`, `invokeAsync`, `runInChildContextAsync`, `mapAsync`, `waitForCallbackAsync`, `waitForConditionAsync`, `withRetryAsync`).
 
@@ -267,7 +272,7 @@ Durable-viz reads the handler source and imported helpers only. A plugin selecte
 
 ### Nested operations
 
-Operations inside `runInChildContext` and retry blocks are drawn as a compound dashed subgraph. The container connects to its first body operation with a dashed edge, and the solid workflow flow exits from the last nested operation. The OTel tab shows the same nesting in the expected span tree. Click any nested node to jump to its source line.
+Operations inside `runInChildContext`, retry blocks, and MicroVM sessions are drawn as a compound dashed subgraph. The container connects to its first body operation with a dashed edge, and the solid workflow flow exits from the last nested operation. The OTel tab shows the same nesting in the expected span tree. Click any nested node to jump to its source line.
 
 ### Visual Encoding
 
@@ -285,6 +290,7 @@ In the Mermaid output, each primitive type has a distinct shape and color:
 | Condition | Diamond | Indigo |
 | Loop | Rounded rectangle, body in a dashed box | Olive |
 | Child Context / With Retry | Subroutine | Teal |
+| MicroVM | Subroutine | Terracotta |
 
 Config-level details (nesting type, completion rules, step semantics, tenant isolation, custom subtypes) are shown as annotations below the node label.
 
@@ -294,7 +300,7 @@ The tool performs static analysis on your source file. It never imports, execute
 
 ### TypeScript / JavaScript
 
-Uses [ts-morph](https://github.com/dsherret/ts-morph) to parse the AST. Finds `withDurableExecution()` calls, walks the handler body, and extracts durable primitives with their names, options, and source locations.
+Uses [ts-morph](https://github.com/dsherret/ts-morph) to parse the AST. Finds `withDurableExecution()` calls, walks the handler body, and extracts durable primitives with their names, options, and source locations. It also resolves imported `microvm` and `microvmSession` calls, aliases, inline session handlers, and named handler references.
 
 **Advanced features** (TypeScript only):
 
@@ -303,7 +309,7 @@ Uses [ts-morph](https://github.com/dsherret/ts-morph) to parse the AST. Finds `w
 
 ### Python
 
-Regex-based parser. Finds `@durable_execution` decorated handlers and extracts `context.<method>()` calls with their `name=` keyword arguments. Also detects the standalone `with_retry()` function and extracts config-level metadata (nesting type, completion config, step semantics, tenant isolation) from both keyword arguments and dict-style configs.
+Regex-based parser. Finds `@durable_execution` decorated handlers and extracts `context.<method>()` calls with their `name=` keyword arguments. Also detects the standalone `with_retry()` function and extracts config-level metadata (nesting type, completion config, step semantics, tenant isolation) from both keyword arguments and dict-style configs. It resolves imported `microvm` and `microvm_session` calls, import aliases, and named session handlers.
 
 ### Java
 
@@ -339,10 +345,12 @@ The `examples/` directory contains sample handlers for each language:
 | --- | --- | --- |
 | `order-workflow.ts` | TypeScript | step, parallel, invoke, waitForCallback, condition |
 | `order-workflow-config.ts` | TypeScript | step, parallel, map, invoke, runInChildContext, withRetry, config features |
+| `microvm.ts` | TypeScript | microvm, microvmSession, vm.invoke, wait |
 | `order-batch-loop.ts` | TypeScript | step, wait, waitForCallback, condition, loop |
 | `order_workflow_otel.ts` | TypeScript | step, waitForCallback, OTel plugin registration |
 | `order_processor.py` | Python | step, wait, create_callback, invoke, condition |
 | `order_processor_with_retry.py` | Python | step, parallel, map, invoke, withRetry, config features |
+| `microvm.py` | Python | microvm, microvm_session, vm.invoke, wait |
 | `order_batch_loop.py` | Python | step, wait, waitForCallback, condition, loop |
 | `order_processor_otel.py` | Python | step, waitForCallback, OTel plugin registration |
 | `OrderProcessor.java` | Java | step, parallel, wait, invoke, waitForCallback, condition |
@@ -415,6 +423,7 @@ Build Mode:  [canvas] → cyToWorkflowGraph() → WorkflowGraph → generateCode
 - **Mermaid rendering.** Arrow routing for fan-in (multiple edges converging on one node) is controlled by Mermaid's layout engine. Complex workflows with many parallel branches may have overlapping edges.
 - **Loops show structure, not control flow.** `break`, `continue`, and `else` clauses are not drawn. Loop bodies written without braces, one-line bodies (`for x in y: step()`), and iteration through callbacks (`forEach`, `.map`, `for_each`, LINQ) are not detected as loops.
 - **Python/Java/C# parsers are regex-based.** They handle standard patterns well but may miss unusual formatting (e.g., method calls split across many lines with comments between arguments).
+- **MicroVM support is TypeScript/JavaScript and Python only.** The diagram shows the user-level `microvm`, `microvmSession`, and `vm.invoke` operations. It does not expand the extension's internal callback, launch, request, or terminate steps.
 
 ## Contributing
 

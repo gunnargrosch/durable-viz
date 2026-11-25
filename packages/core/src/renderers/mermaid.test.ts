@@ -302,3 +302,24 @@ describe('renderMermaid card style with nested operations', () => {
     assert.ok(!output.split('\n').some((l) => l.trimStart().startsWith('style ')))
   })
 })
+
+describe('renderMermaid MicroVM operations', () => {
+  it('renders MicroVM cards and nests session jobs', () => {
+    const graph = parseFile(resolve(import.meta.dirname, '../../test-fixtures/microvm.ts'))
+
+    const classic = renderMermaid(graph)
+    assert.ok(classic.includes('build'))
+    assert.ok(classic.includes('pipeline'))
+    assert.ok(classic.includes('write'))
+    assert.ok(classic.includes('read'))
+
+    const card = renderMermaid(graph, { style: 'card' })
+    assert.ok(card.includes("<span class='dv-kind'>MicroVM</span>"))
+    assert.ok(card.includes("<span class='dv-kind'>MicroVM session</span>"))
+    assert.ok(card.includes("<span class='dv-kind'>MicroVM job</span>"))
+    assert.ok(!card.includes('subtype MicrovmSession'))
+    assert.ok(!card.includes('subtype MicrovmSessionJob'))
+    assert.ok(card.includes('sub_pipeline') || card.includes('sub_microvm_'))
+    assert.ok(card.split('\n').some((l) => /^\s+class \S+ dv-microvm$/.test(l)))
+  })
+})

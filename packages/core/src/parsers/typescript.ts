@@ -308,6 +308,108 @@ function extractDurableFunction(fn: FunctionLike): { body: Block; contextParam: 
 }
 
 // ---------------------------------------------------------------------------
+// MicroVM extension detection
+// ---------------------------------------------------------------------------
+
+interface MicrovmInfo {
+  microvmNames: Set<string>
+  sessionNames: Set<string>
+  handlers: Map<string, FunctionLike>
+}
+
+/** Collect the local names for imported MicroVM operations and named handlers. */
+function collectMicrovmInfo(sourceFile: SourceFile): MicrovmInfo {
+  const microvmNames = new Set<string>()
+  const sessionNames = new Set<string>()
+
+  for (const imp of sourceFile.getImportDeclarations()) {
+    if (!/\/compute\/microvm$/.test(imp.getModuleSpecifierValue())) continue
+    for (const named of imp.getNamedImports()) {
+      const original = named.getName()
+      const local = named.getAliasNode()?.getText() ?? original
+      if (original === 'microvm') microvmNames.add(local)
+      if (original === 'microvmSession') sessionNames.add(local)
+    }
+  }
+
+  const handlers = new Map<string, FunctionLike>()
+  for (const fn of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
+    const name = fn.getName()
+    if (name) handlers.set(name, fn)
+  }
+  for (const varDecl of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    const init = varDecl.getInitializer()
+    if (!init) continue
+    if (init.getKind() === SyntaxKind.ArrowFunction) {
+      handlers.set(varDecl.getName(), init as ArrowFunction)
+    } else if (init.getKind() === SyntaxKind.FunctionExpression) {
+      handlers.set(varDecl.getName(), init as FunctionExpression)
+    }
+  }
+
+  return { microvmNames, sessionNames, handlers }
+}
+
+/** Check for a call to one of the imported MicroVM functions. */
+function isMicrovmFunctionCall(call: CallExpression, names: Set<string>): boolean {
+  const expr = call.getExpression()
+  return expr.getKind() === SyntaxKind.Identifier && names.has(expr.getText())
+}
+
+/** Check for a `vm.invoke(...)` call on a MicroVM session handle. */
+function isMicrovmJobCall(call: CallExpression, handles: Set<string>): boolean {
+  const expr = call.getExpression()
+  if (expr.getKind() !== SyntaxKind.PropertyAccessExpression) return false
+  const text = expr.getText()
+  const dot = text.lastIndexOf('.')
+  if (dot < 0 || text.slice(dot + 1) !== 'invoke') return false
+  return handles.has(text.slice(0, dot))
+}
+
+/** Resolve a MicroVM session handler argument to a function-like node. */
+function resolveMicrovmHandler(call: CallExpression, microvm: MicrovmInfo): FunctionLike | undefined {
+  const args = call.getArguments()
+  const arg = args[args.length - 1]
+  if (!arg) return undefined
+  if (arg.getKind() === SyntaxKind.ArrowFunction || arg.getKind() === SyntaxKind.FunctionExpression) {
+    return arg as FunctionLike
+  }
+  if (arg.getKind() === SyntaxKind.Identifier) {
+    return microvm.handlers.get(arg.getText())
+  }
+  return undefined
+}
+
+/** Extract the user-written operations inside a MicroVM session handler. */
+function extractMicrovmHandlerNodes(
+  handler: FunctionLike,
+  durableFunctions: Map<string, { body: Block; contextParam: string }>,
+  sourceFile: SourceFile,
+  microvm: MicrovmInfo,
+): WorkflowNode[] {
+  const body = handler.getBody()
+  if (!body || body.getKind() !== SyntaxKind.Block) return []
+
+  const params = handler.getParameters()
+  const vmParam = params[0]?.getName()
+  const contextParam = params[1]?.getName()
+  const contextNames = new Set<string>()
+  const handles = new Set<string>()
+  if (contextParam) contextNames.add(contextParam)
+  if (vmParam) handles.add(vmParam)
+
+  return extractFromBlock(
+    (body as Block).getStatements(),
+    contextNames,
+    durableFunctions,
+    new Set(),
+    sourceFile,
+    microvm,
+    handles,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Registry resolution for dynamic parallel branches
 // ---------------------------------------------------------------------------
 
@@ -357,6 +459,8 @@ function extractNestedFunctionNodes(
   call: CallExpression,
   durableFunctions: Map<string, { body: Block; contextParam: string }>,
   sourceFile: SourceFile,
+  microvm: MicrovmInfo,
+  microvmHandles: Set<string>,
 ): WorkflowNode[] {
   const fnArg = [...call.getArguments()].reverse().find((arg) =>
     arg.getKind() === SyntaxKind.ArrowFunction || arg.getKind() === SyntaxKind.FunctionExpression
@@ -384,6 +488,8 @@ function extractNestedFunctionNodes(
     durableFunctions,
     new Set(),
     sourceFile,
+    microvm,
+    microvmHandles,
   )
 }
 
@@ -391,7 +497,14 @@ function extractNestedFunctionNodes(
 // Parallel branch extraction
 // ---------------------------------------------------------------------------
 
-function extractParallelBranches(call: CallExpression, contextNames: Set<string>, sourceFile: SourceFile): WorkflowBranch[] {
+function extractParallelBranches(
+  call: CallExpression,
+  contextNames: Set<string>,
+  durableFunctions: Map<string, { body: Block; contextParam: string }>,
+  sourceFile: SourceFile,
+  microvm: MicrovmInfo,
+  microvmHandles: Set<string>,
+): WorkflowBranch[] {
   const branches: WorkflowBranch[] = []
   const secondArg = call.getArguments()[1]
   if (!secondArg) return branches
@@ -523,6 +636,46 @@ function extractParallelBranches(call: CallExpression, contextNames: Set<string>
     }
   }
 
+  if (branches.length === 0) {
+    // A map callback often carries the work directly, including a `microvm`
+    // call. Parse it as one dynamic branch when no other branch shape matched.
+    const fnArg = call.getArguments().find((arg) =>
+      arg.getKind() === SyntaxKind.ArrowFunction || arg.getKind() === SyntaxKind.FunctionExpression
+    )
+    if (fnArg) {
+      const fn = fnArg as FunctionLike
+      const body = fn.getBody()
+      if (body) {
+        const statements = body.getKind() === SyntaxKind.Block ? (body as Block).getStatements() : [body]
+        const childContextNames = new Set(contextNames)
+        const params = fn.getParameters()
+        for (const param of params) {
+          const typeText = param.getTypeNode()?.getText() ?? ''
+          if (typeText.includes('DurableContext')) childContextNames.add(param.getName())
+        }
+        if (childContextNames.size === 0 && params.length > 0) {
+          childContextNames.add(params[0].getName())
+        }
+        const nodes = extractFromBlock(
+          statements,
+          childContextNames,
+          durableFunctions,
+          new Set(),
+          sourceFile,
+          microvm,
+          microvmHandles,
+        )
+        if (nodes.length > 0) {
+          branches.push({
+            name: nodes.find((n) => n.kind === 'microvm')?.label ?? 'each item',
+            dynamic: true,
+            nodes,
+          })
+        }
+      }
+    }
+  }
+
   return branches
 }
 
@@ -538,6 +691,8 @@ function extractParallelBranches(call: CallExpression, contextNames: Set<string>
  * @param durableFunctions - map of helper function names → bodies
  * @param visited - prevents infinite recursion for recursive helpers
  * @param sourceFile - the source file (for resolving registry objects)
+ * @param microvm - imported MicroVM operations and named handlers
+ * @param microvmHandles - MicroVM session handle names in scope
  */
 function extractFromBlock(
   statements: Node[],
@@ -545,6 +700,8 @@ function extractFromBlock(
   durableFunctions: Map<string, { body: Block; contextParam: string }>,
   visited: Set<string>,
   sourceFile: SourceFile,
+  microvm: MicrovmInfo,
+  microvmHandles: Set<string>,
 ): WorkflowNode[] {
   const nodes: WorkflowNode[] = []
 
@@ -561,6 +718,8 @@ function extractFromBlock(
         durableFunctions,
         visited,
         sourceFile,
+        microvm,
+        microvmHandles,
       )
 
       if (thenNodes.length > 0) {
@@ -594,12 +753,14 @@ function extractFromBlock(
         durableFunctions,
         visited,
         sourceFile,
+        microvm,
+        microvmHandles,
       )
 
       if (bodyNodes.length > 0) {
         // A durable call in the iterable (for await ... of await ctx.step(...)) runs once, before the loop
         if (iterable) {
-          nodes.push(...extractFromBlock([iterable], contextNames, durableFunctions, visited, sourceFile))
+          nodes.push(...extractFromBlock([iterable], contextNames, durableFunctions, visited, sourceFile, microvm, microvmHandles))
         }
         nodes.push({
           id: nextId('loop'),
@@ -616,7 +777,10 @@ function extractFromBlock(
     }
 
     // Find all call expressions in this statement
-    const calls = stmt.getDescendantsOfKind(SyntaxKind.CallExpression)
+    const calls = [
+      ...(stmt.getKind() === SyntaxKind.CallExpression ? [stmt as CallExpression] : []),
+      ...stmt.getDescendantsOfKind(SyntaxKind.CallExpression),
+    ]
     const consumed = new Set<number>()
 
     for (const call of calls) {
@@ -640,7 +804,7 @@ function extractFromBlock(
       } else if (isDurableCall(call, 'parallel', contextNames)) {
         markDescendants(call, consumed)
         const name = getStringArg(call, 0)
-        const branches = extractParallelBranches(call, contextNames, sourceFile)
+        const branches = extractParallelBranches(call, contextNames, durableFunctions, sourceFile, microvm, microvmHandles)
         nodes.push({
           id: nextId('parallel'),
           kind: 'parallel',
@@ -704,12 +868,12 @@ function extractFromBlock(
           nestingType: getNestingType(call),
           subType: getConfigProp(call, 'subType'),
           sourceLine: lineOf(call),
-          children: extractNestedFunctionNodes(call, durableFunctions, sourceFile),
+          children: extractNestedFunctionNodes(call, durableFunctions, sourceFile, microvm, microvmHandles),
         })
       } else if (isDurableCall(call, 'map', contextNames)) {
         markDescendants(call, consumed)
         const name = getStringArg(call, 0)
-        const branches = extractParallelBranches(call, contextNames, sourceFile)
+        const branches = extractParallelBranches(call, contextNames, durableFunctions, sourceFile, microvm, microvmHandles)
         nodes.push({
           id: nextId('map'),
           kind: 'map',
@@ -760,7 +924,42 @@ function extractFromBlock(
           retryStrategy: getRetryStrategy(call),
           nestingType: getNestingType(call),
           sourceLine: lineOf(call),
-          children: extractNestedFunctionNodes(call, durableFunctions, sourceFile),
+          children: extractNestedFunctionNodes(call, durableFunctions, sourceFile, microvm, microvmHandles),
+        })
+      } else if (isMicrovmFunctionCall(call, microvm.microvmNames)) {
+        markDescendants(call, consumed)
+        nodes.push({
+          id: nextId('microvm'),
+          kind: 'microvm',
+          label: getStringArg(call, 1) ?? 'microvm',
+          subType: 'Microvm',
+          timeout: getTimeoutInfo(call),
+          sourceLine: lineOf(call),
+        })
+      } else if (isMicrovmFunctionCall(call, microvm.sessionNames)) {
+        markDescendants(call, consumed)
+        const handler = resolveMicrovmHandler(call, microvm)
+        const children = handler
+          ? extractMicrovmHandlerNodes(handler, durableFunctions, sourceFile, microvm)
+          : []
+        nodes.push({
+          id: nextId('microvm'),
+          kind: 'microvm',
+          label: getStringArg(call, 1) ?? 'microvm session',
+          subType: 'MicrovmSession',
+          timeout: getTimeoutInfo(call),
+          sourceLine: lineOf(call),
+          ...(children.length > 0 ? { children } : {}),
+        })
+      } else if (isMicrovmJobCall(call, microvmHandles)) {
+        markDescendants(call, consumed)
+        nodes.push({
+          id: nextId('microvm'),
+          kind: 'microvm',
+          label: getStringArg(call, 1) ?? 'microvm job',
+          subType: 'MicrovmSessionJob',
+          timeout: getTimeoutInfo(call),
+          sourceLine: lineOf(call),
         })
       } else {
         // --- Function-reference following ---
@@ -781,6 +980,8 @@ function extractFromBlock(
             durableFunctions,
             visited,
             sourceFile,
+            microvm,
+            microvmHandles,
           )
           nodes.push(...inlinedNodes)
 
@@ -825,6 +1026,7 @@ export class TypeScriptParser implements Parser {
 
     // Build map of helper functions that accept DurableContext
     const durableFunctions = buildDurableFunctionMap(sourceFile)
+    const microvm = collectMicrovmInfo(sourceFile)
 
     // Find withDurableExecution() calls
     const durableCalls = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)
@@ -861,8 +1063,10 @@ export class TypeScriptParser implements Parser {
 
     // Determine the context parameter name from the handler signature
     const contextNames = new Set<string>()
-    const handlerParams = handler.getDescendantsOfKind(SyntaxKind.Parameter)
-    for (const param of handlerParams) {
+    const handlerFn = handler.asKind(SyntaxKind.ArrowFunction)
+      ?? handler.asKind(SyntaxKind.FunctionExpression)
+      ?? handler.asKind(SyntaxKind.FunctionDeclaration)
+    for (const param of handlerFn?.getParameters() ?? []) {
       const typeText = param.getTypeNode()?.getText() ?? ''
       if (typeText.includes('DurableContext')) {
         contextNames.add(param.getName())
@@ -880,6 +1084,8 @@ export class TypeScriptParser implements Parser {
       durableFunctions,
       new Set(),
       sourceFile,
+      microvm,
+      new Set(),
     )
 
     const startNode: WorkflowNode = {

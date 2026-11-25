@@ -217,6 +217,9 @@ function genTypeScriptNode(
     case 'promiseAllSettled':
       return `${pad}const ${vname} = await context.promise.allSettled('${node.label}', [\n${pad}${IDENT}// TODO: add promises\n${pad}]);`
 
+    case 'microvm':
+      return `${pad}// TODO: ${node.label} runs in a MicroVM (${node.subType ?? 'Microvm'})`
+
     case 'condition':
     case 'loop':
     case 'start':
@@ -467,6 +470,8 @@ function genPythonNode(
       return `${pad}with_retry(context=context, func=lambda retry_ctx, attempt: None, name="${node.label}")  # TODO: implement with retry\n`
     case 'runInChildContext':
       return `${pad}context.run_in_child_context(func=lambda child_ctx: None, name="${node.label}")  # TODO: implement in child context\n`
+    case 'microvm':
+      return `${pad}# TODO: ${node.label} runs in a MicroVM (${node.subType ?? 'Microvm'})\n`
     default:
       return ''
   }
@@ -934,6 +939,7 @@ function genRustNode(
       return `${pad}let ${vname} = ctx.race([\n${pad}${IDENT}// TODO: add operation futures (e.g. ctx.step(...).name("x").future())\n${pad}]).name("${node.label}").await?;`
     case 'promiseAllSettled':
       return `${pad}let ${vname} = ctx.join_all([\n${pad}${IDENT}// TODO: add operation futures (e.g. ctx.step(...).name("x").future())\n${pad}]).name("${node.label}").await?;`
+    case 'microvm':
     case 'condition':
     case 'loop':
     case 'start':
@@ -1143,6 +1149,7 @@ function genGoNode(
     case 'promiseAllSettled':
       return `${pad}${vname}, err := durable.AllSettled[any](ctx, "${node.label}", []*durable.Future[any]{\n${pad}${GO_IDENT}// TODO: add operation futures\n${pad}})${errCheck}`
 
+    case 'microvm':
     case 'condition':
     case 'loop':
     case 'start':

@@ -62,16 +62,14 @@ const PRIMITIVES: Record<string, PrimitiveInfo> = {
  * Pattern: def handler(event: dict, context: DurableContext)
  * Returns the parameter name (e.g. "context", "ctx").
  */
-function findContextParam(handlerBody: string): string[] {
-  const paramPattern = /def\s+\w+\s*\([^)]*?(\w+)\s*:\s*DurableContext/g
-  const names: string[] = []
-  let match
-  while ((match = paramPattern.exec(handlerBody)) !== null) {
-    names.push(match[1])
-  }
+function findContextParam(source: string, handlerBody: string): string[] {
+  const bodyIndex = source.indexOf(handlerBody)
+  const prefix = bodyIndex >= 0 ? source.slice(0, bodyIndex) : source
+  const defs = [...prefix.matchAll(/def\s+\w+\s*\(([^)]*)\)[^:]*:/g)]
+  const signature = defs[defs.length - 1]?.[1] ?? ''
+  const names = [...signature.matchAll(/(\w+)\s*:\s*DurableContext/g)].map((match) => match[1])
   if (names.length === 0) {
-    // Fallback: common names
-    names.push('context', 'ctx')
+    return ['context', 'ctx']
   }
   return names
 }
@@ -183,6 +181,88 @@ function lineOfSubstring(source: string, substring: string): number {
   return source.slice(0, idx).split('\n').length
 }
 
+// ---------------------------------------------------------------------------
+// MicroVM extension detection
+// ---------------------------------------------------------------------------
+
+interface PythonMicrovmHandler {
+  body: string
+  vmParam: string
+  contextParam: string
+  offset: number
+}
+
+interface PythonMicrovmInfo {
+  microvmNames: Set<string>
+  sessionNames: Set<string>
+  handlers: Map<string, PythonMicrovmHandler>
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Collect imported MicroVM functions and named session handlers. */
+function findMicrovmInfo(source: string): PythonMicrovmInfo {
+  const microvmNames = new Set<string>()
+  const sessionNames = new Set<string>()
+
+  const importPattern = /from\s+([A-Za-z0-9_.]+)\s+import\s+(?:\(([\s\S]*?)\)|([^\n#]+))/g
+  for (const match of source.matchAll(importPattern)) {
+    if (!/(^|\.)compute\.microvm$/.test(match[1])) continue
+    const imported = (match[2] ?? match[3] ?? '').replace(/#.*/g, '')
+    for (const item of imported.split(',')) {
+      const cleaned = item.trim()
+      if (!cleaned) continue
+      const [original, alias] = cleaned.split(/\s+as\s+/)
+      const name = original.trim()
+      const local = alias?.trim() || name
+      if (name === 'microvm') microvmNames.add(local)
+      if (name === 'microvm_session') sessionNames.add(local)
+    }
+  }
+
+  const handlers = new Map<string, PythonMicrovmHandler>()
+  const funcPattern = /def\s+(\w+)\s*\(([^)]*)\)[^:]*:/g
+  for (const match of source.matchAll(funcPattern)) {
+    const contextParam = match[2].match(/(\w+)\s*:\s*DurableContext/)?.[1]
+    if (!contextParam) continue
+    const vmParam = match[2].match(/^\s*(\w+)/)?.[1]
+    if (!vmParam || vmParam === contextParam) continue
+
+    const startIdx = match.index! + match[0].length
+    const body = extractPythonBlock(source, startIdx)
+    if (!body) continue
+    handlers.set(match[1], {
+      body,
+      vmParam,
+      contextParam,
+      offset: lineOfSubstring(source, body),
+    })
+  }
+
+  return { microvmNames, sessionNames, handlers }
+}
+
+/** Find a bare MicroVM function call on a source line. */
+function matchMicrovmCall(line: string, names: Set<string>): string | undefined {
+  for (const name of names) {
+    if (new RegExp(`(^|[^\\w.])${escapeRegExp(name)}\\s*\\(`).test(line)) return name
+  }
+  return undefined
+}
+
+/** Extract the operation name from the second positional argument. */
+function extractMicrovmCallName(callText: string, callee: string): string | undefined {
+  return callText.match(new RegExp(`${escapeRegExp(callee)}\\s*\\(\\s*\\w+\\s*,\\s*["']([^"']+)["']`))?.[1]
+}
+
+/** Extract the job name from `vm.invoke(ctx, "name", ...)`. */
+function extractMicrovmJobName(callText: string): string | undefined {
+  return callText.match(/\.invoke\s*\(\s*\w+\s*,\s*["']([^"']+)["']/)?.[1]
+}
+
+
 /** Count iterations for `for x in range(3)` / `range(1, 4)` with literal bounds. */
 function pythonLoopIterations(header: string): number | undefined {
   const range = header.match(/\bin\s+range\(\s*(?:(\d+)\s*,\s*)?(\d+)\s*\)$/)
@@ -200,6 +280,8 @@ function pythonLoopIterations(header: string): number | undefined {
  * @param visited - recursion guard
  * @param source - the full file source (for computing absolute line numbers)
  * @param baseLineOffset - 1-based line offset of body within source
+ * @param microvm - imported MicroVM operations and named handlers
+ * @param microvmHandles - MicroVM session handle names in scope
  */
 function extractNodes(
   body: string,
@@ -208,6 +290,8 @@ function extractNodes(
   visited: Set<string>,
   source: string,
   baseLineOffset: number,
+  microvm: PythonMicrovmInfo,
+  microvmHandles: Set<string>,
 ): WorkflowNode[] {
   const nodes: WorkflowNode[] = []
   const lines = body.split('\n')
@@ -243,7 +327,7 @@ function extractNodes(
       const ifBody = extractPythonBlock(body, blockStart)
       const ifBodyFirstLine = blockFirstLine(i)
       const ifBodyOffset = baseLineOffset + ifBodyFirstLine
-      const thenNodes = extractNodes(ifBody, contextNames, helpers, visited, source, ifBodyOffset)
+      const thenNodes = extractNodes(ifBody, contextNames, helpers, visited, source, ifBodyOffset, microvm, microvmHandles)
 
       if (thenNodes.length > 0) {
         const ifLines = ifBody.trim().split('\n')
@@ -273,7 +357,7 @@ function extractNodes(
       const header = loopMatch[2].trim()
       const loopBody = extractPythonBlock(body, lineStarts[i] + lines[i].length)
       const bodyFirstLine = blockFirstLine(i)
-      const bodyNodes = extractNodes(loopBody, contextNames, helpers, visited, source, baseLineOffset + bodyFirstLine)
+      const bodyNodes = extractNodes(loopBody, contextNames, helpers, visited, source, baseLineOffset + bodyFirstLine, microvm, microvmHandles)
 
       if (bodyNodes.length > 0) {
         const iterations = loopMatch[1] === 'for' ? pythonLoopIterations(header) : undefined
@@ -293,12 +377,73 @@ function extractNodes(
       }
     }
 
-    // Check for durable primitive calls
+    // MicroVM extension calls
     let matched = false
+    const sessionCall = matchMicrovmCall(line, microvm.sessionNames)
+    if (sessionCall) {
+      matched = true
+      const callText = extractCallText(lines, i)
+      const handlerName = callText.match(/\bhandler\s*=\s*(\w+)/)?.[1]
+      const handler = handlerName ? microvm.handlers.get(handlerName) : undefined
+      const children = handler
+        ? extractNodes(
+            handler.body,
+            [handler.contextParam],
+            helpers,
+            new Set(),
+            source,
+            handler.offset,
+            microvm,
+            new Set([handler.vmParam]),
+          )
+        : []
+      nodes.push({
+        id: nextId('microvm'),
+        kind: 'microvm',
+        label: extractMicrovmCallName(callText, sessionCall) ?? 'microvm session',
+        subType: 'MicrovmSession',
+        sourceLine: absLine,
+        ...(children.length > 0 ? { children } : {}),
+      })
+    }
+
+    if (!matched) {
+      const microvmCall = matchMicrovmCall(line, microvm.microvmNames)
+      if (microvmCall) {
+        matched = true
+        const callText = extractCallText(lines, i)
+        nodes.push({
+          id: nextId('microvm'),
+          kind: 'microvm',
+          label: extractMicrovmCallName(callText, microvmCall) ?? 'microvm',
+          subType: 'Microvm',
+          sourceLine: absLine,
+        })
+      }
+    }
+
+    if (!matched && microvmHandles.size > 0) {
+      const handle = [...microvmHandles].find((name) =>
+        new RegExp(`(^|[^\\w.])${escapeRegExp(name)}\\.invoke\\s*\\(`).test(line)
+      )
+      if (handle) {
+        matched = true
+        const callText = extractCallText(lines, i)
+        nodes.push({
+          id: nextId('microvm'),
+          kind: 'microvm',
+          label: extractMicrovmJobName(callText) ?? 'microvm job',
+          subType: 'MicrovmSessionJob',
+          sourceLine: absLine,
+        })
+      }
+    }
+
+    // Check for durable primitive calls
     for (const contextName of contextNames) {
       if (matched) break
       for (const [method, info] of Object.entries(PRIMITIVES)) {
-        const callPattern = new RegExp(`${contextName}\\.${method}\\s*\\(`)
+        const callPattern = new RegExp(`(^|[^\\w.])${escapeRegExp(contextName)}\\.${method}\\s*\\(`)
         if (!callPattern.test(line)) continue
 
         matched = true
@@ -344,6 +489,8 @@ function extractNodes(
               new Set(),
               source,
               childHelper.offset,
+              microvm,
+              microvmHandles,
             )
           }
         }
@@ -391,6 +538,8 @@ function extractNodes(
               new Set(),
               source,
               retryHelper.offset,
+              microvm,
+              microvmHandles,
             ),
           } : {}),
         })
@@ -400,7 +549,7 @@ function extractNodes(
     if (!matched) {
       for (const [funcName, helper] of helpers) {
         if (suppressedHelpers.has(funcName)) continue
-        if (line.includes(`${funcName}(`) && !visited.has(funcName)) {
+        if (line.includes(`${funcName}(`) && !/^(?:async\s+)?def\s+/.test(line) && !visited.has(funcName)) {
           visited.add(funcName)
           const inlined = extractNodes(
             helper.body,
@@ -409,6 +558,8 @@ function extractNodes(
             visited,
             source,
             helper.offset,
+            microvm,
+            microvmHandles,
           )
           nodes.push(...inlined)
           visited.delete(funcName)
@@ -546,11 +697,12 @@ export class PythonParser implements Parser {
       throw new Error(`No @durable_execution handler found in ${filePath}`)
     }
 
-    const contextNames = findContextParam(source)
+    const contextNames = findContextParam(source, handlerBody)
     const helpers = findHelperFunctions(source)
+    const microvm = findMicrovmInfo(source)
 
     const handlerOffset = lineOfSubstring(source, handlerBody)
-    const workflowNodes = extractNodes(handlerBody, contextNames, helpers, new Set(), source, handlerOffset)
+    const workflowNodes = extractNodes(handlerBody, contextNames, helpers, new Set(), source, handlerOffset, microvm, new Set())
 
     const startNode: WorkflowNode = {
       id: 'node_start',

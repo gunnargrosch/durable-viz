@@ -66,8 +66,11 @@ durable-viz handler.ts --json
 | Wait for Condition | `context.waitForCondition()` | `context.wait_for_condition()` | `ctx.waitForCondition()` | `ctx.WaitForConditionAsync()` | `ctx.wait_for_condition()` | `durable.WaitForCondition()` |
 | Child Context | `context.runInChildContext()` | `context.run_in_child_context()` | `ctx.runInChildContext()` | `ctx.RunInChildContextAsync()` | `ctx.run_in_child_context()` | `durable.RunInChildContext()` |
 | With Retry | `withRetry(context, ...)` | `with_retry(context, ...)` | `ctx.withRetry(...)` | via `StepConfig` | `ctx.with_retry()` | `durable.Retry()` |
+| MicroVM | `microvm()`, `microvmSession()` | `microvm()`, `microvm_session()` | — | — | — | — |
 
-TypeScript also supports `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`.
+TypeScript also supports `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`, plus `microvm` calls inside `context.map` callbacks.
+
+TypeScript/JavaScript and Python also support the MicroVM extension operations. `microvm` is one job in a new MicroVM. `microvmSession` is one MicroVM shared by `vm.invoke` jobs, drawn as a container with the session handler operations inside it. The extension internals are hidden.
 
 Java also supports `DurableFuture.allOf(futures...)` and `DurableFuture.anyOf(futures...)`, plus the async operation variants (`stepAsync`, `waitAsync`, `invokeAsync`, `runInChildContextAsync`, `mapAsync`, `waitForCallbackAsync`, `waitForConditionAsync`, `withRetryAsync`).
 
@@ -77,7 +80,7 @@ Go (GA v1.0) also supports `durable.ParallelMixed()` with its `NewTypedBranch` b
 
 TypeScript, Python, C#, Rust, and Go custom operation subtypes (`subType` / `sub_type` / `SubType` / `WithStepSubType` / `.sub_type(...)`) are shown as annotations on the diagram.
 
-Operations inside child contexts and retry blocks are drawn as nested subgraphs.
+Operations inside child contexts, retry blocks, and MicroVM sessions are drawn as nested subgraphs.
 
 Handlers that register the OpenTelemetry plugin in source get an OTel badge and an OTel tab with the expected span tree. Detection covers TypeScript/JavaScript, Python, and Java, and follows helper functions in imported files. When a helper picks the mode at runtime, the badge shows `OTel: env` and the tooltip names the environment variable and its possible modes.
 
@@ -95,6 +98,7 @@ The browser page draws every node as a card with an icon and a kind label. The s
 | Condition | Diamond | Indigo |
 | Loop | Rounded rectangle, body in a dashed box | Olive |
 | Child Context / With Retry | Subroutine | Teal |
+| MicroVM | Subroutine | Terracotta |
 
 ## Build Mode
 
