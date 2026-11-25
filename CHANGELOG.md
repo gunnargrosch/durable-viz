@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.2] - 2026-11-23
+
+### Added
+
+- Java operation coverage now includes every async variant: `stepAsync`, `waitAsync`, `invokeAsync`, `runInChildContextAsync`, `mapAsync`, `waitForCallbackAsync`, `waitForConditionAsync`, and `withRetryAsync`.
+- Java code generation now emits `DurableFuture.allOf` and `DurableFuture.anyOf`.
+- Python now parses the functional `handler = durable_execution(handler_fn)` entry point.
+- TypeScript now resolves named handlers passed to `withDurableExecution(handler)`.
+- C# now resolves workflows defined in another file, including `DurableFunction.WrapAsync(SomeClass.Method, ...)`. Click-to-navigate opens the workflow file.
+
+### Fixed
+
+- C# workflow signatures with nullable, array, and nested generic types now parse.
+- Java `invokeAsync` now extracts the target function instead of the operation name.
+
+### Changed
+
+- Updated the repo and CLI READMEs with the Java async variants and C# multi-file behavior.
+
 ## [0.12.1] - 2026-11-23
 
 ### Changed
