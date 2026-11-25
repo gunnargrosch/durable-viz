@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.0] - 2026-11-25
+
+### Changed
+
+- **New look for View mode.** The VS Code panel and the CLI `--open` page now draw nodes as dark cards with a line icon, a kind label and the node name. Start and End are yellow circles, parallel, loop and nested bodies sit in thin rounded containers, edge labels are boxed, and the legend uses the node icons.
+- The diagram follows your theme. In VS Code, colors derive from the editor theme, and the diagram re-renders when you switch between light and dark. In the browser it follows the OS color scheme.
+- Save PNG exports the styled diagram with a solid background and a 24px margin. Before, the export lost the page styles and clipped the labels.
+- New extension icon, exported at 256x256.
+- The README opens with an image of the View mode in place of a Mermaid block, with light and dark versions.
+- The Source tab still shows the classic Mermaid text, so it pastes into READMEs and GitHub.
+
+### Added
+
+- `renderMermaid` accepts `style: 'card'`. The default `classic` output is unchanged.
+- `examples/order-parallel.ts`, a short workflow with a parallel step.
+
+### Notes
+
+- Build mode keeps its current look.
+
 ## [0.13.0] - 2026-11-25
 
 ### Added
