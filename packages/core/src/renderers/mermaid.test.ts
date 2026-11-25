@@ -254,3 +254,51 @@ describe('renderMermaid loops', () => {
     assert.ok(output.includes('cond_1{"tag == #quot;#35;vip#quot;"}'))
   })
 })
+
+describe('renderMermaid card style', () => {
+  it('emits class assignments instead of style lines', () => {
+    const graph = parseFile(resolve(examplesDir, 'order-workflow.ts'))
+    const output = renderMermaid(graph, { style: 'card' })
+
+    assert.ok(output.startsWith('graph TD'))
+    assert.ok(!output.split('\n').some((l) => l.trimStart().startsWith('style ')))
+    assert.ok(output.includes('class node_start dv-terminal'))
+    assert.ok(output.split('\n').some((l) => /^\s+class \S+ dv-step$/.test(l)))
+  })
+
+  it('renders a two-line label with kind and name', () => {
+    const graph = parseFile(resolve(examplesDir, 'order-workflow.ts'))
+    const output = renderMermaid(graph, { style: 'card' })
+
+    assert.ok(output.includes("<span class='dv-kind'>Step</span>"))
+    assert.ok(output.includes("<span class='dv-name'>"))
+  })
+
+  it('keeps classic output as the default', () => {
+    const graph = parseFile(resolve(examplesDir, 'order-workflow.ts'))
+
+    assert.equal(renderMermaid(graph), renderMermaid(graph, { style: 'classic' }))
+    assert.ok(!renderMermaid(graph).includes('dv-'))
+  })
+
+  it('labels every node in a graph with parallel branches', () => {
+    const graph = parseFile(resolve(examplesDir, 'order-workflow.ts'))
+    const output = renderMermaid(graph, { style: 'card' })
+    const classLines = output.split('\n').filter((l) => /^\s+class \S+ dv-/.test(l))
+    const branchNodes = graph.nodes.reduce((sum, n) => sum + (n.branches?.reduce((s, b) => s + b.nodes.length, 0) ?? 0), 0)
+
+    assert.equal(classLines.length, graph.nodes.length + branchNodes)
+  })
+})
+
+describe('renderMermaid card style with nested operations', () => {
+  it('classes nested child nodes and drops container style lines', () => {
+    const graph = parseFile(resolve(import.meta.dirname, '../../test-fixtures/nested_context.ts'))
+    const output = renderMermaid(graph, { style: 'card' })
+    const nestedIds = graph.nodes.flatMap((n) => n.children?.map((c) => c.id) ?? [])
+
+    assert.ok(nestedIds.length > 0)
+    for (const id of nestedIds) assert.ok(output.includes(`class ${id} dv-`), `missing class for ${id}`)
+    assert.ok(!output.split('\n').some((l) => l.trimStart().startsWith('style ')))
+  })
+})

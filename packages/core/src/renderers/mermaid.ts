@@ -3,9 +3,16 @@
  */
 
 import { buildEdges, type WorkflowGraph, type WorkflowNode, type WorkflowEdge } from '../graph.js'
+import { CARD_KIND_LABEL, cardGroupForKind, cardIconForKind } from './card-theme.js'
 
 export interface MermaidOptions {
   direction?: 'TD' | 'LR'
+  /**
+   * "classic" uses colored Mermaid shapes and renders anywhere Mermaid does.
+   * "card" emits HTML labels and class names meant for a page that loads the
+   * card theme CSS (see card-theme.ts). Defaults to "classic".
+   */
+  style?: 'classic' | 'card'
 }
 
 /** Escape text for use inside Mermaid node labels. */
@@ -52,6 +59,23 @@ function buildAnnotation(node: WorkflowNode): string {
   if (node.maxConcurrency != null) parts.push(`concurrency ${node.maxConcurrency}`)
   if (parts.length === 0) return ''
   return '<br>' + parts.join('<br>')
+}
+
+function buildCardMeta(node: WorkflowNode): string {
+  const parts = buildAnnotation(node).split('<br>').filter(Boolean)
+  return parts.length ? `<span class='dv-meta'>${parts.join(' · ')}</span>` : ''
+}
+
+/** Card-style node: terminals are circles, everything else is a rectangle with an icon and two text lines. */
+function cardShape(node: WorkflowNode): string {
+  if (node.kind === 'start' || node.kind === 'end') {
+    return `(("<span class='dv-terminal-label'>${escQuoted(node.label)}</span>"))`
+  }
+  const icon = cardIconForKind(node.kind)
+  const iconHtml = icon ? `<span class='dv-icon dv-i-${icon}'></span>` : ''
+  const name = escQuoted(node.label)
+  const kindLabel = CARD_KIND_LABEL[node.kind]
+  return `["<div class='dv-card'>${iconHtml}<span class='dv-text'><span class='dv-kind'>${kindLabel}</span><span class='dv-name'>${name}</span>${buildCardMeta(node)}</span></div>"]`
 }
 
 function shapeForKind(node: WorkflowNode): string {
@@ -154,6 +178,8 @@ function styleForKind(node: WorkflowNode): string | undefined {
 
 export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): string {
   const direction = options?.direction ?? 'TD'
+  const card = options?.style === 'card'
+  const shape = card ? cardShape : shapeForKind
   const lines: string[] = [`graph ${direction}`]
   if (graph.otel) {
     const mode = graph.otel.environmentVariable
@@ -169,7 +195,7 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
   const topLevelExits = new Map<string, string[]>()
   for (const node of graph.nodes) topLevelExits.set(node.id, exitIds(node))
 
-  const subgraphStyle = (subId: string) =>
+  const subgraphStyle = (subId: string) => card ? '' :
     `  style ${subId} fill:transparent,stroke:#444,stroke-width:1px,stroke-dasharray:5 5,rx:8,ry:8`
 
   // Loop bodies are the flat nodes that follow a loop node. Track where each
@@ -185,7 +211,7 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
 
     if (hasBranches) {
       // Emit the parallel/map hub node outside the subgraph
-      lines.push(`  ${node.id}${shapeForKind(node)}`)
+      lines.push(`  ${node.id}${shape(node)}`)
 
       // Emit branch nodes inside a subgraph
       const subId = `sub_${node.id}`
@@ -194,21 +220,21 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
       for (const branch of node.branches!) {
         for (const bNode of branch.nodes) {
           allNodes.push(bNode)
-          lines.push(`    ${bNode.id}${shapeForKind(bNode)}`)
+          lines.push(`    ${bNode.id}${shape(bNode)}`)
         }
       }
 
       lines.push('  end')
       // Style the subgraph container
-      lines.push(subgraphStyle(subId))
+      if (!card) lines.push(subgraphStyle(subId))
     } else if (hasChildren) {
       const subId = `sub_${node.id}`
       lines.push(`  subgraph ${subId}[" "]`)
-      lines.push(`    ${node.id}${shapeForKind(node)}`)
+      lines.push(`    ${node.id}${shape(node)}`)
       lines.push(`    ${node.id} -.-> ${node.children![0].id}`)
       for (const child of node.children!) {
         allNodes.push(child)
-        lines.push(`    ${child.id}${shapeForKind(child)}`)
+        lines.push(`    ${child.id}${shape(child)}`)
       }
       const childExits = new Map<string, string[]>()
       for (const child of node.children!) childExits.set(child.id, exitIds(child))
@@ -218,23 +244,23 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
         }
       }
       lines.push('  end')
-      lines.push(subgraphStyle(subId))
+      if (!card) lines.push(subgraphStyle(subId))
     } else if (node.kind === 'loop') {
       // The loop header sits outside the subgraph, like a parallel hub
-      lines.push(`  ${node.id}${shapeForKind(node)}`)
+      lines.push(`  ${node.id}${shape(node)}`)
       const bodyEnd = Math.min(index + Math.max(node.bodyCount ?? 1, 1), graph.nodes.length - 1)
       const subId = `sub_${node.id}`
       lines.push(`  subgraph ${subId}[" "]`)
       openLoops.push({ subId, endIndex: bodyEnd })
     } else {
-      lines.push(`  ${node.id}${shapeForKind(node)}`)
+      lines.push(`  ${node.id}${shape(node)}`)
     }
 
     // Close every loop subgraph whose body ends at this node
     while (openLoops.length > 0 && openLoops[openLoops.length - 1].endIndex <= index) {
       const closed = openLoops.pop()!
       lines.push('  end')
-      lines.push(subgraphStyle(closed.subId))
+      if (!card) lines.push(subgraphStyle(closed.subId))
     }
   })
 
@@ -252,6 +278,10 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
 
   // Styles
   for (const node of allNodes) {
+    if (card) {
+      lines.push(`  class ${node.id} dv-${cardGroupForKind(node.kind)}`)
+      continue
+    }
     const style = styleForKind(node)
     if (style) lines.push(`  ${style}`)
   }

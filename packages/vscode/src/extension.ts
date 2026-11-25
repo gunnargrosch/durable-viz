@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import { otelModeLabel, parseFile, renderMermaid, renderOtelTree, type WorkflowOtel } from '@durable-viz/core'
+import { cardDiagramCss, cardLegendHtml, otelModeLabel, parseFile, renderMermaid, renderOtelTree, type WorkflowOtel } from '@durable-viz/core'
 import { generateCode } from '@durable-viz/core'
 
 let currentPanel: vscode.WebviewPanel | undefined
@@ -94,16 +94,17 @@ function updatePanel(panel: vscode.WebviewPanel, filePath: string) {
   try {
     const graph = parseFile(filePath)
     currentSourceFile = graph.sourceFile
-    const mermaid = renderMermaid(graph, { direction: currentDirection })
+    const mermaid = renderMermaid(graph, { direction: currentDirection, style: 'card' })
+    const classicMermaid = renderMermaid(graph, { direction: currentDirection })
     panel.title = `Durable Viz: ${graph.name}`
-    panel.webview.html = buildWebviewHtml(mermaid, graph.name, JSON.stringify(graph, null, 2), currentDirection, graph.otel, renderOtelTree(graph))
+    panel.webview.html = buildWebviewHtml(mermaid, classicMermaid, graph.name, JSON.stringify(graph, null, 2), currentDirection, graph.otel, renderOtelTree(graph))
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     panel.webview.html = buildErrorHtml(message)
   }
 }
 
-function buildWebviewHtml(mermaid: string, title: string, graphJson: string, direction: 'TD' | 'LR', otel?: WorkflowOtel, otelTree?: string): string {
+function buildWebviewHtml(mermaid: string, classicMermaid: string, title: string, graphJson: string, direction: 'TD' | 'LR', otel?: WorkflowOtel, otelTree?: string): string {
   const otelDetail = otel
     ? otel.environmentVariable
       ? `${otel.environmentVariable}${otel.modes?.length ? ` (${otel.modes.join(' or ')})` : ''}`
@@ -125,9 +126,15 @@ function buildWebviewHtml(mermaid: string, title: string, graphJson: string, dir
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
+      --dv-fg: var(--vscode-editor-foreground, #d4d4d4);
+      --dv-bg: var(--vscode-editor-background, #1e1e1e);
+      --dv-card: color-mix(in srgb, var(--dv-fg) 7%, var(--dv-bg));
+      --dv-border: color-mix(in srgb, var(--dv-fg) 28%, var(--dv-bg));
+      --dv-muted: color-mix(in srgb, var(--dv-fg) 62%, var(--dv-bg));
+      --dv-edge: color-mix(in srgb, var(--dv-fg) 45%, var(--dv-bg));
       font-family: var(--vscode-font-family, sans-serif);
-      background: var(--vscode-editor-background, #1e1e1e);
-      color: var(--vscode-editor-foreground, #d4d4d4);
+      background: var(--dv-bg);
+      color: var(--dv-fg);
       display: flex;
       flex-direction: column;
       height: 100vh;
@@ -188,8 +195,7 @@ function buildWebviewHtml(mermaid: string, title: string, graphJson: string, dir
       height: auto !important;
     }
     .mermaid .node { cursor: pointer; }
-    .mermaid .node:hover { filter: brightness(1.2); }
-    .mermaid .node .label { padding: 8px 12px; }
+    ${cardDiagramCss()}
     .legend {
       display: flex;
       gap: 12px;
@@ -204,11 +210,6 @@ function buildWebviewHtml(mermaid: string, title: string, graphJson: string, dir
       display: flex;
       align-items: center;
       gap: 4px;
-    }
-    .legend-swatch {
-      width: 10px;
-      height: 10px;
-      border-radius: 2px;
     }
     .source-panel {
       display: none;
@@ -265,7 +266,7 @@ function buildWebviewHtml(mermaid: string, title: string, graphJson: string, dir
   <div class="diagram-container" id="container">
     <div class="diagram-wrapper" id="wrapper">
       <pre class="mermaid">
-${mermaid}
+${mermaid.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}
       </pre>
     </div>
     <div class="source-panel" id="source-panel">
@@ -278,14 +279,7 @@ ${mermaid}
     </div>
   </div>
   <div class="legend">
-    <div class="legend-item"><div class="legend-swatch" style="background:#5b8ab4"></div> Start / End</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#4a8c72"></div> Step</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#b8873a"></div> Invoke</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#7b6b9e"></div> Parallel / Map</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#b05a5a"></div> Wait / Callback</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#6b71a8"></div> Condition</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#7d8a3e"></div> Loop</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:#4a849e"></div> Child Context</div>
+    ${cardLegendHtml()}
   </div>
   <script type="application/json" id="graph-json">${graphJson}</script>
   <script type="module">
@@ -307,9 +301,9 @@ ${mermaid}
 
     mermaid.initialize({
       startOnLoad: true,
-      theme: 'dark',
+      theme: document.body.classList.contains('vscode-light') ? 'default' : 'dark',
       securityLevel: 'loose',
-      flowchart: { curve: 'basis', padding: 15, nodeSpacing: 30, rankSpacing: 40 },
+      flowchart: { curve: 'basis', padding: 12, nodeSpacing: 40, rankSpacing: 50, htmlLabels: true },
       themeVariables: { nodePadding: 12 },
     });
 
@@ -319,6 +313,7 @@ ${mermaid}
     const container = document.getElementById('container');
 
     let mermaidRaw = document.querySelector('.mermaid').textContent.trim();
+    let classicRaw = ${JSON.stringify(classicMermaid)};
     let scale = 1;
     let panX = 0;
     let panY = 0;
@@ -409,25 +404,91 @@ ${mermaid}
       const mermaidEl = wrapper.querySelector('.mermaid');
       const isLR = mermaidRaw.startsWith('graph LR');
       mermaidRaw = isLR ? mermaidRaw.replace(/^graph LR/, 'graph TD') : mermaidRaw.replace(/^graph TD/, 'graph LR');
+      classicRaw = isLR ? classicRaw.replace(/^graph LR/, 'graph TD') : classicRaw.replace(/^graph TD/, 'graph LR');
       btn.textContent = isLR ? 'LR' : 'TD';
       vscode.postMessage({ type: 'directionChanged', direction: isLR ? 'TD' : 'LR' });
       mermaidEl.removeAttribute('data-processed');
-      mermaidEl.innerHTML = mermaidRaw;
+      mermaidEl.textContent = mermaidRaw;
       wrapper.classList.remove('ready');
       scale = 1; panX = 0; panY = 0; applyTransform();
       await mermaid.run({ nodes: [mermaidEl] });
       requestAnimationFrame(() => { fitToView(); wrapper.classList.add('ready'); });
     };
 
+    // Re-render when the VS Code theme changes so Mermaid's own theme colors follow it.
+    let currentTheme = document.body.classList.contains('vscode-light') ? 'default' : 'dark';
+    let themeTimer;
+    new MutationObserver(() => {
+      const nextTheme = document.body.classList.contains('vscode-light') ? 'default' : 'dark';
+      if (nextTheme === currentTheme) return;
+      currentTheme = nextTheme;
+      clearTimeout(themeTimer);
+      themeTimer = setTimeout(async () => {
+        const mermaidEl = wrapper.querySelector('.mermaid');
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: currentTheme,
+          securityLevel: 'loose',
+          flowchart: { curve: 'basis', padding: 12, nodeSpacing: 40, rankSpacing: 50, htmlLabels: true },
+          themeVariables: { nodePadding: 12 },
+        });
+        mermaidEl.removeAttribute('data-processed');
+        mermaidEl.textContent = mermaidRaw;
+        // Mermaid measures labels through CSS transforms, so render at 100% and restore the view after.
+        const savedScale = scale, savedPanX = panX, savedPanY = panY;
+        scale = 1; panX = 0; panY = 0; applyTransform();
+        await mermaid.run({ nodes: [mermaidEl] });
+        scale = savedScale; panX = savedPanX; panY = savedPanY; applyTransform();
+      }, 100);
+    }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+    // Standalone SVG images do not see page CSS, so copy computed styles onto a clone before export.
+    const EXPORT_PADDING = 24;
+    const SKIP_PROPS = new Set(['transform', 'transform-origin', 'perspective-origin', 'inline-size', 'block-size', 'x', 'y', 'cx', 'cy', 'd']);
+    function serializeWithStyles(svg) {
+      const clone = svg.cloneNode(true);
+      const originals = [svg, ...svg.querySelectorAll('*')];
+      const copies = [clone, ...clone.querySelectorAll('*')];
+      originals.forEach((el, i) => {
+        const computed = getComputedStyle(el);
+        const isSvgEl = el instanceof SVGElement;
+        let css = '';
+        for (const prop of computed) {
+          if (SKIP_PROPS.has(prop)) continue;
+          if (isSvgEl && (prop === 'width' || prop === 'height')) continue;
+          css += prop + ':' + computed.getPropertyValue(prop) + ';';
+        }
+        copies[i].setAttribute('style', css);
+      });
+      const vb = svg.viewBox.baseVal;
+      const width = vb.width || svg.clientWidth;
+      const height = vb.height || svg.clientHeight;
+      const fullWidth = width + EXPORT_PADDING * 2;
+      const fullHeight = height + EXPORT_PADDING * 2;
+      clone.removeAttribute('style');
+      clone.setAttribute('viewBox', (vb.x - EXPORT_PADDING) + ' ' + (vb.y - EXPORT_PADDING) + ' ' + fullWidth + ' ' + fullHeight);
+      clone.setAttribute('width', fullWidth);
+      clone.setAttribute('height', fullHeight);
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      background.setAttribute('x', vb.x - EXPORT_PADDING);
+      background.setAttribute('y', vb.y - EXPORT_PADDING);
+      background.setAttribute('width', fullWidth);
+      background.setAttribute('height', fullHeight);
+      background.setAttribute('fill', getComputedStyle(document.body).backgroundColor);
+      clone.insertBefore(background, clone.firstChild);
+      return new XMLSerializer().serializeToString(clone);
+    }
+
     document.getElementById('download-png').onclick = () => {
       const svg = wrapper.querySelector('svg');
       if (!svg) return;
-      const svgData = new XMLSerializer().serializeToString(svg);
+      const svgData = serializeWithStyles(svg);
       const canvas = document.createElement('canvas');
       const s = 4;
       const bb = svg.viewBox.baseVal;
-      const sw = bb.width || svg.clientWidth;
-      const sh = bb.height || svg.clientHeight;
+      const sw = (bb.width || svg.clientWidth) + EXPORT_PADDING * 2;
+      const sh = (bb.height || svg.clientHeight) + EXPORT_PADDING * 2;
       canvas.width = sw * s;
       canvas.height = sh * s;
       const ctx = canvas.getContext('2d');
@@ -440,7 +501,7 @@ ${mermaid}
       img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
     };
 
-    function getMermaidSource() { return mermaidRaw; }
+    function getMermaidSource() { return classicRaw; }
     const jsonSource = document.getElementById('graph-json').textContent;
     const otelSource = ${JSON.stringify(otelTree ?? '')};
     const sourcePanel = document.getElementById('source-panel');

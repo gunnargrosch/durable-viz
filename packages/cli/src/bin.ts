@@ -3,7 +3,7 @@ import { resolve, basename } from 'node:path'
 import { tmpdir } from 'node:os'
 import { writeFileSync, readFileSync } from 'node:fs'
 import { exec, execSync } from 'node:child_process'
-import { otelModeLabel, parseFile, renderMermaid, renderOtelTree, type WorkflowOtel } from '@durable-viz/core'
+import { cardDiagramCss, cardLegendHtml, otelModeLabel, parseFile, renderMermaid, renderOtelTree, type WorkflowOtel } from '@durable-viz/core'
 import { version } from '../package.json'
 
 function isWSL(): boolean {
@@ -43,7 +43,7 @@ function openInBrowser(filePath: string): void {
   }
 }
 
-function buildHtml(mermaid: string, title: string, graphJson: string, otel?: WorkflowOtel, otelTree?: string): string {
+function buildHtml(mermaid: string, classicMermaid: string, title: string, graphJson: string, otel?: WorkflowOtel, otelTree?: string): string {
   const otelDetail = otel
     ? otel.environmentVariable
       ? `${otel.environmentVariable}${otel.modes?.length ? ` (${otel.modes.join(' or ')})` : ''}`
@@ -58,10 +58,25 @@ function buildHtml(mermaid: string, title: string, graphJson: string, otel?: Wor
   <title>${title} - durable-viz</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      color-scheme: dark light;
+      --dv-bg: #0f172a; --dv-fg: #e2e8f0;
+      --dv-chrome: #1e293b; --dv-chrome-border: #334155; --dv-chrome-muted: #64748b; --dv-chrome-text: #94a3b8;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --dv-bg: #ffffff; --dv-fg: #1e293b;
+        --dv-chrome: #f1f5f9; --dv-chrome-border: #cbd5e1; --dv-chrome-muted: #64748b; --dv-chrome-text: #475569;
+      }
+    }
     body {
+      --dv-card: color-mix(in srgb, var(--dv-fg) 7%, var(--dv-bg));
+      --dv-border: color-mix(in srgb, var(--dv-fg) 28%, var(--dv-bg));
+      --dv-muted: color-mix(in srgb, var(--dv-fg) 62%, var(--dv-bg));
+      --dv-edge: color-mix(in srgb, var(--dv-fg) 45%, var(--dv-bg));
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
+      background: var(--dv-bg);
+      color: var(--dv-fg);
       display: flex;
       flex-direction: column;
       height: 100vh;
@@ -72,32 +87,32 @@ function buildHtml(mermaid: string, title: string, graphJson: string, otel?: Wor
       align-items: center;
       justify-content: space-between;
       padding: 1rem 1.5rem;
-      border-bottom: 1px solid #1e293b;
+      border-bottom: 1px solid var(--dv-chrome);
       flex-shrink: 0;
     }
     h1 {
       font-size: 1.1rem;
       font-weight: 500;
-      color: #94a3b8;
+      color: var(--dv-chrome-text);
     }
-    h1 span { color: #e2e8f0; }
-    .otel-badge { display: inline-block; margin-left: 0.6rem; padding: 0.15rem 0.45rem; border: 1px solid #334155; border-radius: 999px; color: #94a3b8; font-size: 0.7rem; font-weight: 500; white-space: nowrap; }
+    h1 span { color: var(--dv-fg); }
+    .otel-badge { display: inline-block; margin-left: 0.6rem; padding: 0.15rem 0.45rem; border: 1px solid var(--dv-chrome-border); border-radius: 999px; color: var(--dv-chrome-text); font-size: 0.7rem; font-weight: 500; white-space: nowrap; }
     .controls {
       display: flex;
       gap: 0.5rem;
       align-items: center;
     }
     .controls button {
-      background: #1e293b;
-      border: 1px solid #334155;
-      color: #e2e8f0;
+      background: var(--dv-chrome);
+      border: 1px solid var(--dv-chrome-border);
+      color: var(--dv-fg);
       padding: 0.3rem 0.7rem;
       border-radius: 6px;
       cursor: pointer;
       font-size: 0.9rem;
     }
-    .controls button:hover { background: #334155; }
-    .controls span { color: #64748b; font-size: 0.8rem; }
+    .controls button:hover { background: var(--dv-chrome-border); }
+    .controls span { color: var(--dv-chrome-muted); font-size: 0.8rem; }
     .diagram-container {
       flex: 1;
       overflow: hidden;
@@ -116,12 +131,12 @@ function buildHtml(mermaid: string, title: string, graphJson: string, otel?: Wor
       max-width: none !important;
       height: auto !important;
     }
-    .mermaid .node .label { padding: 8px 12px; }
+    ${cardDiagramCss()}
     footer {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-top: 1px solid #1e293b;
+      border-top: 1px solid var(--dv-chrome);
       flex-shrink: 0;
       padding: 0.5rem 1.5rem;
     }
@@ -130,29 +145,24 @@ function buildHtml(mermaid: string, title: string, graphJson: string, otel?: Wor
       gap: 1.5rem;
       flex-wrap: wrap;
       font-size: 0.75rem;
-      color: #64748b;
+      color: var(--dv-chrome-muted);
     }
     footer a {
-      color: #64748b;
+      color: var(--dv-chrome-muted);
       font-size: 0.75rem;
       text-decoration: none;
     }
-    footer a:hover { color: #94a3b8; }
+    footer a:hover { color: var(--dv-chrome-text); }
     .legend-item {
       display: flex;
       align-items: center;
       gap: 0.35rem;
     }
-    .legend-swatch {
-      width: 12px;
-      height: 12px;
-      border-radius: 3px;
-    }
     .source-panel {
       display: none;
       position: absolute;
       inset: 0;
-      background: #0f172a;
+      background: var(--dv-bg);
       z-index: 10;
       flex-direction: column;
     }
@@ -160,19 +170,19 @@ function buildHtml(mermaid: string, title: string, graphJson: string, otel?: Wor
     .source-tabs {
       display: flex;
       gap: 0;
-      border-bottom: 1px solid #1e293b;
+      border-bottom: 1px solid var(--dv-chrome);
       flex-shrink: 0;
     }
     .source-tabs button {
       background: none;
       border: none;
-      color: #64748b;
+      color: var(--dv-chrome-muted);
       padding: 0.5rem 1rem;
       cursor: pointer;
       font-size: 0.8rem;
       border-bottom: 2px solid transparent;
     }
-    .source-tabs button.active { color: #e2e8f0; border-bottom-color: #e2e8f0; }
+    .source-tabs button.active { color: var(--dv-fg); border-bottom-color: var(--dv-fg); }
     .source-content {
       flex: 1;
       overflow: auto;
@@ -180,7 +190,7 @@ function buildHtml(mermaid: string, title: string, graphJson: string, otel?: Wor
       font-family: monospace;
       font-size: 0.8rem;
       white-space: pre;
-      color: #e2e8f0;
+      color: var(--dv-fg);
     }
   </style>
 </head>
@@ -200,7 +210,7 @@ function buildHtml(mermaid: string, title: string, graphJson: string, otel?: Wor
   <div class="diagram-container" id="container">
     <div class="diagram-wrapper" id="wrapper">
       <pre class="mermaid">
-${mermaid}
+${mermaid.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}
       </pre>
     </div>
     <div class="source-panel" id="source-panel">
@@ -214,14 +224,7 @@ ${mermaid}
   </div>
   <footer>
     <div class="legend">
-      <div class="legend-item"><div class="legend-swatch" style="background:#5b8ab4"></div> Start / End</div>
-      <div class="legend-item"><div class="legend-swatch" style="background:#4a8c72"></div> Step</div>
-      <div class="legend-item"><div class="legend-swatch" style="background:#b8873a"></div> Invoke</div>
-      <div class="legend-item"><div class="legend-swatch" style="background:#7b6b9e"></div> Parallel / Map</div>
-      <div class="legend-item"><div class="legend-swatch" style="background:#b05a5a"></div> Wait / Callback</div>
-      <div class="legend-item"><div class="legend-swatch" style="background:#6b71a8"></div> Condition</div>
-<div class="legend-item"><div class="legend-swatch" style="background:#7d8a3e"></div> Loop</div>
-      <div class="legend-item"><div class="legend-swatch" style="background:#4a849e"></div> Child Context</div>
+      ${cardLegendHtml()}
     </div>
     <a href="https://github.com/gunnargrosch/durable-viz" target="_blank">github.com/gunnargrosch/durable-viz</a>
   </footer>
@@ -230,8 +233,8 @@ ${mermaid}
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
     mermaid.initialize({
       startOnLoad: true,
-      theme: 'dark',
-      flowchart: { curve: 'basis', padding: 15, nodeSpacing: 30, rankSpacing: 40 },
+      theme: window.matchMedia('(prefers-color-scheme: light)').matches ? 'default' : 'dark',
+      flowchart: { curve: 'basis', padding: 12, nodeSpacing: 40, rankSpacing: 50, htmlLabels: true },
       themeVariables: { nodePadding: 12 },
     });
 
@@ -240,6 +243,7 @@ ${mermaid}
     const container = document.getElementById('container');
 
     let mermaidRaw = document.querySelector('.mermaid').textContent.trim();
+    let classicRaw = ${JSON.stringify(classicMermaid)};
     let scale = 1;
     let panX = 0;
     let panY = 0;
@@ -325,24 +329,63 @@ ${mermaid}
       const mermaidEl = wrapper.querySelector('.mermaid');
       const isLR = mermaidRaw.startsWith('graph LR');
       mermaidRaw = isLR ? mermaidRaw.replace(/^graph LR/, 'graph TD') : mermaidRaw.replace(/^graph TD/, 'graph LR');
+      classicRaw = isLR ? classicRaw.replace(/^graph LR/, 'graph TD') : classicRaw.replace(/^graph TD/, 'graph LR');
       btn.textContent = isLR ? 'LR' : 'TD';
       mermaidEl.removeAttribute('data-processed');
-      mermaidEl.innerHTML = mermaidRaw;
+      mermaidEl.textContent = mermaidRaw;
       wrapper.classList.remove('ready');
       scale = 1; panX = 0; panY = 0; applyTransform();
       await mermaid.run({ nodes: [mermaidEl] });
       requestAnimationFrame(() => { fitToView(); wrapper.classList.add('ready'); });
     };
 
+    // Standalone SVG images do not see page CSS, so copy computed styles onto a clone before export.
+    const EXPORT_PADDING = 24;
+    const SKIP_PROPS = new Set(['transform', 'transform-origin', 'perspective-origin', 'inline-size', 'block-size', 'x', 'y', 'cx', 'cy', 'd']);
+    function serializeWithStyles(svg) {
+      const clone = svg.cloneNode(true);
+      const originals = [svg, ...svg.querySelectorAll('*')];
+      const copies = [clone, ...clone.querySelectorAll('*')];
+      originals.forEach((el, i) => {
+        const computed = getComputedStyle(el);
+        const isSvgEl = el instanceof SVGElement;
+        let css = '';
+        for (const prop of computed) {
+          if (SKIP_PROPS.has(prop)) continue;
+          if (isSvgEl && (prop === 'width' || prop === 'height')) continue;
+          css += prop + ':' + computed.getPropertyValue(prop) + ';';
+        }
+        copies[i].setAttribute('style', css);
+      });
+      const vb = svg.viewBox.baseVal;
+      const width = vb.width || svg.clientWidth;
+      const height = vb.height || svg.clientHeight;
+      const fullWidth = width + EXPORT_PADDING * 2;
+      const fullHeight = height + EXPORT_PADDING * 2;
+      clone.removeAttribute('style');
+      clone.setAttribute('viewBox', (vb.x - EXPORT_PADDING) + ' ' + (vb.y - EXPORT_PADDING) + ' ' + fullWidth + ' ' + fullHeight);
+      clone.setAttribute('width', fullWidth);
+      clone.setAttribute('height', fullHeight);
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      background.setAttribute('x', vb.x - EXPORT_PADDING);
+      background.setAttribute('y', vb.y - EXPORT_PADDING);
+      background.setAttribute('width', fullWidth);
+      background.setAttribute('height', fullHeight);
+      background.setAttribute('fill', getComputedStyle(document.body).backgroundColor);
+      clone.insertBefore(background, clone.firstChild);
+      return new XMLSerializer().serializeToString(clone);
+    }
+
     document.getElementById('download-png').onclick = () => {
       const svg = wrapper.querySelector('svg');
       if (!svg) return;
-      const svgData = new XMLSerializer().serializeToString(svg);
+      const svgData = serializeWithStyles(svg);
       const canvas = document.createElement('canvas');
       const scale = 4;
       const bb = svg.viewBox.baseVal;
-      const sw = bb.width || svg.clientWidth;
-      const sh = bb.height || svg.clientHeight;
+      const sw = (bb.width || svg.clientWidth) + EXPORT_PADDING * 2;
+      const sh = (bb.height || svg.clientHeight) + EXPORT_PADDING * 2;
       canvas.width = sw * scale;
       canvas.height = sh * scale;
       const ctx = canvas.getContext('2d');
@@ -357,7 +400,7 @@ ${mermaid}
       img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
     };
 
-    function getMermaidSource() { return mermaidRaw; }
+    function getMermaidSource() { return classicRaw; }
     const jsonSource = document.getElementById('graph-json').textContent;
     const otelSource = ${JSON.stringify(otelTree ?? '')};
     const sourcePanel = document.getElementById('source-panel');
@@ -411,10 +454,11 @@ const program = new Command()
 
       const direction = options.direction as 'TD' | 'LR'
       const mermaid = renderMermaid(graph, { direction })
+      const cardMermaid = renderMermaid(graph, { direction, style: 'card' })
 
       if (options.open) {
         const title = options.name ?? basename(filePath, '.ts')
-        const html = buildHtml(mermaid, title, JSON.stringify(graph, null, 2), graph.otel, renderOtelTree(graph))
+        const html = buildHtml(cardMermaid, mermaid, title, JSON.stringify(graph, null, 2), graph.otel, renderOtelTree(graph))
         const tmpPath = resolve(getTempDir(), `durable-viz-${Date.now()}.html`)
         writeFileSync(tmpPath, html)
         openInBrowser(tmpPath)
