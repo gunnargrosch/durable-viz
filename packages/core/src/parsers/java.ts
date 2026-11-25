@@ -44,15 +44,23 @@ interface PrimitiveInfo {
 
 const PRIMITIVES: Record<string, PrimitiveInfo> = {
   'step': { kind: 'step', idPrefix: 'step' },
+  'stepAsync': { kind: 'step', idPrefix: 'step' },
   'invoke': { kind: 'invoke', idPrefix: 'invoke' },
+  'invokeAsync': { kind: 'invoke', idPrefix: 'invoke' },
   'map': { kind: 'map', idPrefix: 'map' },
+  'mapAsync': { kind: 'map', idPrefix: 'map' },
   'wait': { kind: 'wait', idPrefix: 'wait' },
+  'waitAsync': { kind: 'wait', idPrefix: 'wait' },
   'waitForCallback': { kind: 'waitForCallback', idPrefix: 'callback' },
+  'waitForCallbackAsync': { kind: 'waitForCallback', idPrefix: 'callback' },
   'createCallback': { kind: 'createCallback', idPrefix: 'createcb' },
   'waitForCondition': { kind: 'waitForCondition', idPrefix: 'waitcond' },
+  'waitForConditionAsync': { kind: 'waitForCondition', idPrefix: 'waitcond' },
   'runInChildContext': { kind: 'runInChildContext', idPrefix: 'child' },
+  'runInChildContextAsync': { kind: 'runInChildContext', idPrefix: 'child' },
   'parallel': { kind: 'parallel', idPrefix: 'parallel' },
   'withRetry': { kind: 'withRetry', idPrefix: 'retry' },
+  'withRetryAsync': { kind: 'withRetry', idPrefix: 'retry' },
 }
 
 // ---------------------------------------------------------------------------
@@ -305,7 +313,8 @@ function extractNodes(
         }
 
         if (info.kind === 'invoke') {
-          const fnMatch = line.match(/invoke\s*\(\s*"([^"]+)"/)
+          const fnMatch = line.match(/\.invoke(?:Async)?\s*\(\s*"[^"]*"\s*,\s*"([^"]+)"/)
+            ?? line.match(/\.invoke(?:Async)?\s*\(\s*"([^"]+)"/)
           if (fnMatch) node.target = fnMatch[1]
           const config = extractJavaConfig(lines, i)
           if (config.tenantId) node.tenantId = config.tenantId

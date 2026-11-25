@@ -79,6 +79,15 @@ describe('TypeScriptParser', () => {
     assert.equal(end!.sourceLine, 80, 'End should land on the last statement, not the closing brace')
   })
 
+  it('resolves a named handler passed to withDurableExecution', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'typescript_handler_reference.ts'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step')
+    assert.equal(step?.label, 'reference-step')
+    const callback = graph.nodes.find((n) => n.kind === 'createCallback')
+    assert.equal(callback?.label, 'reference-callback')
+  })
+
   it('generates edges connecting all nodes', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'order-workflow.ts'))
 

@@ -23,13 +23,13 @@
  * Both delegate to DurableFunction.WrapAsync<TInput, TOutput>(Workflow, ...)
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import type { WorkflowNode, WorkflowBranch, WorkflowGraph } from '../graph.js'
 import { buildEdges, loopLabel } from '../graph.js'
 import { parseCStyleLoopHead, cStyleLoopIterations, doWhileCondition } from './c-style-loops.js'
 import { lastContentLine } from '../source-lines.js'
 import type { Parser, ParseOptions } from '../parser.js'
-import { basename } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 let nodeCounter = 0
 function nextId(prefix: string): string {
@@ -89,12 +89,34 @@ function findContextParam(source: string): string[] {
  * Returns the workflow function name.
  */
 function findWorkflowFunctionName(source: string): string | null {
-  const pattern = /DurableFunction\.WrapAsync\s*<\s*[\w,.\s]+\s*>\s*\(\s*(\w+)\s*,/g
-  let match
-  while ((match = pattern.exec(source)) !== null) {
-    return match[1]
+  const marker = 'DurableFunction.WrapAsync'
+  let searchFrom = 0
+
+  while (true) {
+    const start = source.indexOf(marker, searchFrom)
+    if (start === -1) return null
+    searchFrom = start + marker.length
+
+    let i = start + marker.length
+    while (i < source.length && /\s/.test(source[i])) i++
+
+    if (source[i] === '<') {
+      let depth = 0
+      while (i < source.length) {
+        if (source[i] === '<') depth++
+        else if (source[i] === '>') {
+          depth--
+          if (depth === 0) { i++; break }
+        }
+        i++
+      }
+      while (i < source.length && /\s/.test(source[i])) i++
+    }
+
+    if (source[i] !== '(') continue
+    const match = source.slice(i + 1).match(/^\s*([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*,/)
+    if (match) return match[1]
   }
-  return null
 }
 
 /**
@@ -122,7 +144,7 @@ function findMethodBody(source: string, methodName: string): string | null {
   const escaped = methodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const pattern = new RegExp(
     `(?:private|protected|public|internal|static|async|\\s)+` +
-    `[\\w<>,\\[\\]\\s]+\\s+${escaped}\\s*\\([^)]*\\)\\s*\\{`
+    `[\\w<>,\\[\\]\\s?.]+\\s+${escaped}\\s*\\([^)]*\\)\\s*\\{`
   )
   const match = pattern.exec(source)
   if (!match) return null
@@ -456,6 +478,66 @@ function lineOfSubstring(source: string, substring: string): number {
   return source.slice(0, idx).split('\n').length
 }
 
+/** Find the nearest ancestor directory that contains a .csproj file. */
+function findProjectRoot(startDir: string): string | undefined {
+  let dir = startDir
+  while (true) {
+    try {
+      if (readdirSync(dir).some((entry) => entry.endsWith('.csproj'))) return dir
+    } catch {
+      return undefined
+    }
+    const parent = dirname(dir)
+    if (parent === dir) return undefined
+    dir = parent
+  }
+}
+
+/** Find a class definition in the project tree, starting at the handler directory. */
+function findClassSource(handlerPath: string, className: string): { path: string; source: string } | undefined {
+  let root = findProjectRoot(dirname(handlerPath)) ?? dirname(handlerPath)
+  const classPattern = new RegExp(`\\b(?:class|record|struct)\\s+${className}\\b`)
+  const seen = new Set<string>()
+  let filesRead = 0
+
+  const walk = (dir: string): { path: string; source: string } | undefined => {
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return undefined
+    }
+    for (const entry of entries) {
+      if (filesRead > 20000) return undefined
+      if (['bin', 'obj', '.git', 'node_modules'].includes(entry.name)) continue
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        const found = walk(path)
+        if (found) return found
+      } else if (entry.name.endsWith('.cs') && !seen.has(path)) {
+        seen.add(path)
+        filesRead++
+        try {
+          const source = readFileSync(path, 'utf-8')
+          if (classPattern.test(source)) return { path, source }
+        } catch {
+          // Skip unreadable files.
+        }
+      }
+    }
+    return undefined
+  }
+
+  for (let i = 0; i < 6; i++) {
+    const found = walk(root)
+    if (found) return found
+    const parent = dirname(root)
+    if (parent === root) break
+    root = parent
+  }
+  return undefined
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -472,21 +554,38 @@ export class CSharpParser implements Parser {
 
     // Find the workflow function name from DurableFunction.WrapAsync or the
     // [DurableExecution] annotations model.
-    const workflowName = findWorkflowFunctionName(source) ?? findAnnotatedWorkflowFunction(source)
-    if (!workflowName) {
+    const workflowReference = findWorkflowFunctionName(source) ?? findAnnotatedWorkflowFunction(source)
+    if (!workflowReference) {
       throw new Error(`No DurableFunction.WrapAsync call or [DurableExecution] method found in ${filePath}`)
     }
 
-    // Find and extract the workflow function body
-    const workflowBody = findMethodBody(source, workflowName)
-    if (!workflowBody) {
-      throw new Error(`Workflow function '${workflowName}' not found in ${filePath}`)
+    let workflowSource = source
+    let workflowName = workflowReference
+    let workflowFile = filePath
+    const separator = workflowReference.lastIndexOf('.')
+    if (separator !== -1) {
+      const className = workflowReference.slice(0, separator)
+      workflowName = workflowReference.slice(separator + 1)
+      const classPattern = new RegExp(`\\b(?:class|record|struct)\\s+${className}\\b`)
+      if (!classPattern.test(source)) {
+        const external = findClassSource(filePath, className)
+        if (external) {
+          workflowSource = external.source
+          workflowFile = external.path
+        }
+      }
     }
 
-    const contextNames = findContextParam(source)
+    // Find and extract the workflow function body
+    const workflowBody = findMethodBody(workflowSource, workflowName)
+    if (!workflowBody) {
+      throw new Error(`Workflow function '${workflowReference}' not found in ${filePath}`)
+    }
 
-    const workflowOffset = lineOfSubstring(source, workflowBody)
-    const workflowNodes = extractNodes(workflowBody, contextNames, source, workflowOffset)
+    const contextNames = findContextParam(workflowSource)
+
+    const workflowOffset = lineOfSubstring(workflowSource, workflowBody)
+    const workflowNodes = extractNodes(workflowBody, contextNames, workflowSource, workflowOffset)
 
     const startNode: WorkflowNode = {
       id: 'node_start',
@@ -503,6 +602,11 @@ export class CSharpParser implements Parser {
     const allNodes = [startNode, ...workflowNodes, endNode]
     const edges = buildEdges(allNodes)
 
-    return { name, nodes: allNodes, edges }
+    return {
+      name,
+      nodes: allNodes,
+      edges,
+      ...(workflowFile !== filePath ? { sourceFile: workflowFile } : {}),
+    }
   }
 }

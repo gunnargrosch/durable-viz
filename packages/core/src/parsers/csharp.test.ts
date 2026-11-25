@@ -112,6 +112,23 @@ describe('CSharpParser', () => {
     assert.equal(end!.sourceLine, 84, 'End should land on the last statement, not the closing brace')
   })
 
+  it('parses nullable and array generic types in WrapAsync and the workflow signature', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'DurableNullableGenerics.cs'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step')
+    assert.equal(step?.label, 'nullable-step')
+  })
+
+  it('resolves a workflow defined in another C# file', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'csharp-multifile/Function.cs'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step')
+    assert.equal(step?.label, 'shared-step')
+    const wait = graph.nodes.find((n) => n.kind === 'wait')
+    assert.equal(wait?.label, 'shared-wait')
+    assert.ok(graph.sourceFile?.endsWith('SharedWorkflow.cs'))
+  })
+
   it('generates valid edges', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessor.cs'))
 

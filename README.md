@@ -258,7 +258,7 @@ The parser detects all durable execution SDK primitives.
 
 TypeScript also detects `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`.
 
-Java also detects `DurableFuture.allOf(futures...)` and `DurableFuture.anyOf(futures...)` as promise combinators.
+Java also detects `DurableFuture.allOf(futures...)` and `DurableFuture.anyOf(futures...)` as promise combinators, plus the async operation variants (`stepAsync`, `waitAsync`, `invokeAsync`, `runInChildContextAsync`, `mapAsync`, `waitForCallbackAsync`, `waitForConditionAsync`, `withRetryAsync`).
 
 Rust also detects `ctx.parallel_mixed()` with its `BranchSet` branches, the concurrency combinators `ctx.join_all()`, `ctx.try_join_all()`, `ctx.select_ok()`, and `ctx.race()`, plus the `.future()` and `.spawn()` builder modifiers.
 
@@ -333,7 +333,7 @@ Regex-based parser. Finds classes extending `DurableHandler` and extracts `ctx.<
 
 ### C# (.NET)
 
-Regex-based parser. Finds `DurableFunction.WrapAsync` calls to locate the workflow function, then extracts `ctx.<Method>Async()` calls from the workflow body. Supports both the **executable** model (`Main` + `LambdaBootstrap`) and the **class-library** model (`[assembly: LambdaSerializer]`), plus the **Annotations** model (`[DurableExecution]` attribute on a method with an `IDurableContext` parameter). Extracts names from `name:` named arguments, custom `SubType` labels, and both `DurableBranch<T>` and incremental `CreateParallel().Branch<T>()` patterns for parallel branches. Handles Allman-style braces (common C# convention) for `if`/`else` condition detection.
+Regex-based parser. Finds `DurableFunction.WrapAsync` calls to locate the workflow function, then extracts `ctx.<Method>Async()` calls from the workflow body. Supports both the **executable** model (`Main` + `LambdaBootstrap`) and the **class-library** model (`[assembly: LambdaSerializer]`), plus the **Annotations** model (`[DurableExecution]` attribute on a method with an `IDurableContext` parameter). Extracts names from `name:` named arguments, custom `SubType` labels, and both `DurableBranch<T>` and incremental `CreateParallel().Branch<T>()` patterns for parallel branches. Handles Allman-style braces (common C# convention) for `if`/`else` condition detection. When the workflow method lives in another file, the parser resolves the class from the project tree, and click-to-navigate opens that file.
 
 ### Rust
 

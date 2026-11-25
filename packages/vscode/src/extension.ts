@@ -4,6 +4,7 @@ import { generateCode } from '@durable-viz/core'
 
 let currentPanel: vscode.WebviewPanel | undefined
 let currentFilePath: string | undefined
+let currentSourceFile: string | undefined
 let currentDirection: 'TD' | 'LR' = 'TD'
 
 export function activate(context: vscode.ExtensionContext) {
@@ -56,13 +57,15 @@ function openPanel(context: vscode.ExtensionContext, filePath: string) {
   currentPanel.onDidDispose(() => {
     currentPanel = undefined
     currentFilePath = undefined
+    currentSourceFile = undefined
   })
 
   // Handle messages from webview
   currentPanel.webview.onDidReceiveMessage(async (message) => {
-    if (message.type === 'goToLine' && currentFilePath) {
+    const navigationFile = currentSourceFile ?? currentFilePath
+    if (message.type === 'goToLine' && navigationFile) {
       const line = message.line - 1 // VS Code uses 0-based lines
-      const uri = vscode.Uri.file(currentFilePath)
+      const uri = vscode.Uri.file(navigationFile)
       const doc = await vscode.workspace.openTextDocument(uri)
       const editor = await vscode.window.showTextDocument(doc, vscode.ViewColumn.One)
       const range = new vscode.Range(line, 0, line, 0)
@@ -90,6 +93,7 @@ function openPanel(context: vscode.ExtensionContext, filePath: string) {
 function updatePanel(panel: vscode.WebviewPanel, filePath: string) {
   try {
     const graph = parseFile(filePath)
+    currentSourceFile = graph.sourceFile
     const mermaid = renderMermaid(graph, { direction: currentDirection })
     panel.title = `Durable Viz: ${graph.name}`
     panel.webview.html = buildWebviewHtml(mermaid, graph.name, JSON.stringify(graph, null, 2), currentDirection, graph.otel, renderOtelTree(graph))

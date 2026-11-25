@@ -11,7 +11,7 @@ import {
   Project,
   SyntaxKind,
   type CallExpression,
-  type Node,
+  Node,
   type Block,
   type IfStatement,
   type ForStatement,
@@ -803,14 +803,28 @@ export class TypeScriptParser implements Parser {
       throw new Error('withDurableExecution() has no handler argument')
     }
 
-    const body = handlerArg.getFirstDescendantByKind(SyntaxKind.Block)
+    let handler = handlerArg
+    if (Node.isIdentifier(handlerArg)) {
+      const declarations = handlerArg.getSymbol()?.getDeclarations() ?? []
+      const declaration = declarations.find((d) => Node.isVariableDeclaration(d) || Node.isFunctionDeclaration(d))
+      if (declaration) {
+        if (Node.isVariableDeclaration(declaration)) {
+          const initializer = declaration.getInitializer()
+          if (initializer) handler = initializer
+        } else {
+          handler = declaration
+        }
+      }
+    }
+
+    const body = handler.getFirstDescendantByKind(SyntaxKind.Block)
     if (!body) {
       throw new Error('Handler function has no body')
     }
 
     // Determine the context parameter name from the handler signature
     const contextNames = new Set<string>()
-    const handlerParams = handlerArg.getDescendantsOfKind(SyntaxKind.Parameter)
+    const handlerParams = handler.getDescendantsOfKind(SyntaxKind.Parameter)
     for (const param of handlerParams) {
       const typeText = param.getTypeNode()?.getText() ?? ''
       if (typeText.includes('DurableContext')) {

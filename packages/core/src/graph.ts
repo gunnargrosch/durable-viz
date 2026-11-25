@@ -108,6 +108,8 @@ export interface WorkflowGraph {
   name: string
   nodes: WorkflowNode[]
   edges: WorkflowEdge[]
+  /** Workflow source file when it is not the handler file, for example a C# shared workflow. */
+  sourceFile?: string
   /** Present when the handler registers an OpenTelemetry plugin in source. */
   otel?: WorkflowOtel
 }

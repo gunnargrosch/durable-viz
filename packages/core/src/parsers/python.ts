@@ -83,11 +83,22 @@ function findContextParam(handlerBody: string): string[] {
 function extractHandlerBody(source: string): string | null {
   // Find @durable_execution decorator followed by def
   const decoratorPattern = /@durable_execution(?:\s*\([\s\S]*?\))?\s*\n\s*def\s+(\w+)\s*\([^)]*\)[^:]*:/
-  const match = decoratorPattern.exec(source)
-  if (!match) return null
+  const decorator = decoratorPattern.exec(source)
+  if (decorator) {
+    const startIdx = decorator.index + decorator[0].length
+    return extractPythonBlock(source, startIdx)
+  }
 
-  const startIdx = match.index + match[0].length
-  // Extract the function body based on indentation
+  // Functional entry point: handler = durable_execution(handler_fn, ...)
+  const functional = source.match(/durable_execution\s*\(\s*(\w+)\s*(?:,|\))/)
+  if (!functional) return null
+
+  const fnName = functional[1]
+  const fnPattern = new RegExp(`def\\s+${fnName}\\s*\\([^)]*\\)[^:]*:`)
+  const fnMatch = fnPattern.exec(source)
+  if (!fnMatch) return null
+
+  const startIdx = fnMatch.index + fnMatch[0].length
   return extractPythonBlock(source, startIdx)
 }
 

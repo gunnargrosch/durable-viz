@@ -91,6 +91,18 @@ describe('JavaParser', () => {
     assert.equal(graph.otel?.sourceLine, 12)
   })
 
+  it('detects the async variants of every durable operation', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'DurableAsyncOperations.java'))
+
+    const kinds = graph.nodes.map((n) => n.kind)
+    for (const kind of ['step', 'wait', 'invoke', 'runInChildContext', 'map', 'waitForCallback', 'waitForCondition', 'withRetry'] as const) {
+      assert.ok(kinds.includes(kind), `Expected kind ${kind}, got ${kinds.join(', ')}`)
+    }
+
+    const invoke = graph.nodes.find((n) => n.kind === 'invoke')
+    assert.equal(invoke?.target, 'target')
+  })
+
   it('generates valid edges', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessor.java'))
 

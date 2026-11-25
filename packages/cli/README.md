@@ -69,7 +69,7 @@ durable-viz handler.ts --json
 
 TypeScript also supports `context.promise.all()`, `context.promise.any()`, `context.promise.race()`, and `context.promise.allSettled()`.
 
-Java also supports `DurableFuture.allOf(futures...)` and `DurableFuture.anyOf(futures...)`.
+Java also supports `DurableFuture.allOf(futures...)` and `DurableFuture.anyOf(futures...)`, plus the async operation variants (`stepAsync`, `waitAsync`, `invokeAsync`, `runInChildContextAsync`, `mapAsync`, `waitForCallbackAsync`, `waitForConditionAsync`, `withRetryAsync`).
 
 Rust also supports `ctx.parallel_mixed()` with its `BranchSet` branches, the concurrency combinators `ctx.join_all()`, `ctx.try_join_all()`, `ctx.select_ok()`, and `ctx.race()`, plus the `.future()` and `.spawn()` builder modifiers.
 

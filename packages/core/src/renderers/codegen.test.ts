@@ -197,6 +197,18 @@ describe('Rust: combinators and modifiers', () => {
   })
 })
 
+describe('Java: promise combinators', () => {
+  it('emits DurableFuture.allOf and anyOf', () => {
+    const code = generateCode(makeGraph('test', [
+      makeNode('a', 'promiseAll', 'all-ops'),
+      makeNode('b', 'promiseAny', 'any-ops'),
+    ]), { language: 'java' })
+    assertContains(code, 'import software.amazon.lambda.durable.DurableFuture;')
+    assertContains(code, 'DurableFuture.allOf()')
+    assertContains(code, 'DurableFuture.anyOf()')
+  })
+})
+
 // ---------------------------------------------------------------------------
 // maxConcurrency emission
 // ---------------------------------------------------------------------------

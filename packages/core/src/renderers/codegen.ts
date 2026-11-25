@@ -485,11 +485,13 @@ export function generateJava(graph: WorkflowGraph): string {
 
   const jneedsWait = graph.nodes.some((n) => n.kind === 'wait')
   const jneedsWaitForCondition = graph.nodes.some((n) => n.kind === 'waitForCondition')
+  const jneedsFuture = graph.nodes.some((n) => n.kind === 'promiseAll' || n.kind === 'promiseAny')
 
   lines.push('import software.amazon.lambda.durable.DurableHandler;')
   lines.push('import software.amazon.lambda.durable.DurableContext;')
   if (jneedsWait) lines.push('import software.amazon.lambda.durable.Duration;')
   if (jneedsWaitForCondition) lines.push('import software.amazon.lambda.durable.WaitForConditionConfig;')
+  if (jneedsFuture) lines.push('import software.amazon.lambda.durable.DurableFuture;')
   lines.push('')
   lines.push(`public class ${className} extends DurableHandler<Object, Object> {`)
   lines.push('')
@@ -595,6 +597,10 @@ function genJavaNode(
       return `${pad}var ${vname} = ctx.withRetry("${node.label}", (attempt, retryCtx) -> {\n${pad}${IDENT}// TODO: implement ${node.label} with retry\n${pad}${IDENT}return null;\n${pad}});`
     case 'runInChildContext':
       return `${pad}var ${vname} = ctx.runInChildContext("${node.label}", childCtx -> {\n${pad}${IDENT}// TODO: implement ${node.label} in child context\n${pad}${IDENT}return null;\n${pad}});`
+    case 'promiseAll':
+      return `${pad}// TODO: add operation futures\n${pad}var ${vname} = DurableFuture.allOf();`
+    case 'promiseAny':
+      return `${pad}// TODO: add operation futures\n${pad}var ${vname} = DurableFuture.anyOf();`
     default:
       return ''
   }

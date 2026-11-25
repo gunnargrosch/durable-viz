@@ -74,6 +74,13 @@ describe('PythonParser', () => {
     assert.notEqual(lines[end!.sourceLine! - 1].trim(), '')
   })
 
+  it('parses the functional durable_execution(handler) entry point', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'python_functional_entry.py'))
+
+    const step = graph.nodes.find((n) => n.kind === 'step')
+    assert.equal(step?.label, 'functional-step')
+  })
+
   it('generates valid edges', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'order_processor.py'))
 
