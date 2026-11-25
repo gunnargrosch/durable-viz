@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="durable-viz">
+  <rect width="256" height="256" rx="52" fill="#151a22"/>
+
+  <!-- connectors -->
+  <g fill="none" stroke="#5b6675" stroke-width="4" stroke-linecap="round">
+    <path d="M128 66v22"/>
+    <path d="M128 130c0 18-57 12-57 36"/>
+    <path d="M128 130c0 18 57 12 57 36"/>
+  </g>
+
+  <!-- start -->
+  <circle cx="128" cy="50" r="17" fill="#e8c547"/>
+
+  <!-- step card -->
+  <rect x="82" y="88" width="92" height="42" rx="9" fill="#232b37" stroke="#3b4757" stroke-width="3"/>
+  <g fill="none" stroke="#3fa37f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M102 101l-8 8 8 8M114 101l8 8-8 8"/>
+  </g>
+  <rect x="132" y="104" width="30" height="10" rx="5" fill="#8a96a6"/>
+
+  <!-- invoke cards -->
+  <rect x="24" y="166" width="94" height="42" rx="9" fill="#232b37" stroke="#3b4757" stroke-width="3"/>
+  <g fill="none" stroke="#d39a3a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M38 187h13M47 181l6 6-6 6"/>
+    <path d="M60 178v18"/>
+  </g>
+  <rect x="72" y="182" width="34" height="10" rx="5" fill="#8a96a6"/>
+
+  <rect x="138" y="166" width="94" height="42" rx="9" fill="#232b37" stroke="#3b4757" stroke-width="3"/>
+  <g fill="none" stroke="#d39a3a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M154 187h13M163 181l6 6-6 6"/>
+    <path d="M176 178v18"/>
+  </g>
+  <rect x="188" y="182" width="34" height="10" rx="5" fill="#8a96a6"/>
+</svg>
