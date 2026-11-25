@@ -13,7 +13,7 @@ Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust*
 npx durable-viz handler.ts --open
 ```
 
-Opens an interactive diagram in your browser with scroll zoom, click-drag panning, direction toggle, source view, PNG export, and a dark theme.
+Opens an interactive diagram in your browser with scroll zoom, click-drag panning, direction toggle, source view, PNG export, and light and dark themes that follow your OS setting.
 
 ## Usage
 
@@ -82,6 +82,8 @@ Operations inside child contexts and retry blocks are drawn as nested subgraphs.
 Handlers that register the OpenTelemetry plugin in source get an OTel badge and an OTel tab with the expected span tree. Detection covers TypeScript/JavaScript, Python, and Java, and follows helper functions in imported files. When a helper picks the mode at runtime, the badge shows `OTel: env` and the tooltip names the environment variable and its possible modes.
 
 ## Visual Encoding
+
+The browser page draws every node as a card with an icon and a kind label. The shapes and colors below describe the Mermaid output.
 
 | Node | Shape | Color |
 | --- | --- | --- |

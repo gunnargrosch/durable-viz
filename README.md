@@ -12,40 +12,12 @@ Visualize and build [AWS Lambda Durable Functions](https://docs.aws.amazon.com/l
 
 Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust**, and **Go** runtimes. SDK versions covered: JS 3.0, Python 3.0, Java 3.x, .NET 2.x, Rust 1.0 (GA), and Go 1.0 (GA).
 
-```mermaid
-graph LR
-  node_start([Start])
-  step_1[validate]
-  parallel_2{{prepare}}
-  subgraph sub_parallel_2[" "]
-    invoke_3[/check-inventory\]
-    invoke_4[/reserve-payment\]
-  end
-  style sub_parallel_2 fill:transparent,stroke:#444,stroke-width:1px,stroke-dasharray:5 5
-  step_5[fulfill]
-  cond_6{approval?}
-  callback_7((wait))
-  node_end([End])
-  node_start --> step_1
-  step_1 --> parallel_2
-  parallel_2 --> invoke_3
-  parallel_2 --> invoke_4
-  invoke_3 --> step_5
-  invoke_4 --> step_5
-  step_5 --> cond_6
-  cond_6 -->|yes| callback_7
-  cond_6 -->|no| node_end
-  callback_7 --> node_end
-  style node_start fill:#5b8ab4,stroke:#4a7293,color:#e8edf2
-  style step_1 fill:#4a8c72,stroke:#3d7360,color:#e0efe8
-  style parallel_2 fill:#7b6b9e,stroke:#655883,color:#e8e3f0
-  style invoke_3 fill:#b8873a,stroke:#967032,color:#f5edd8
-  style invoke_4 fill:#b8873a,stroke:#967032,color:#f5edd8
-  style step_5 fill:#4a8c72,stroke:#3d7360,color:#e0efe8
-  style cond_6 fill:#6b71a8,stroke:#575c8a,color:#e3e4f0
-  style callback_7 fill:#b05a5a,stroke:#8f4a4a,color:#f2e0e0
-  style node_end fill:#5b8ab4,stroke:#4a7293,color:#e8edf2
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/order-parallel-dark.png">
+    <img src="docs/order-parallel-light.png" alt="Flowchart of an order workflow: validate the order, run four invoke calls in parallel (inventory, payment, fraud screening, shipping quote), then confirm" width="880">
+  </picture>
+</p>
 
 Read the [blog post](https://dev.to/gunnargrosch/visualizing-aws-lambda-durable-function-workflows-with-durable-viz-1838) for a walkthrough of the View mode with examples.
 
@@ -227,7 +199,7 @@ Options:
 durable-viz handler.ts
 ```
 
-**Browser** generates a self-contained HTML file and opens it. Includes dark theme, zoom controls, and color legend.
+**Browser** generates a self-contained HTML file and opens it. Includes zoom controls, a legend, and light and dark themes that follow your OS setting.
 
 ```shell
 durable-viz handler.ts --open
@@ -299,7 +271,9 @@ Operations inside `runInChildContext` and retry blocks are drawn as a compound d
 
 ### Visual Encoding
 
-Each primitive type has a distinct shape and color in the diagram:
+In the VS Code View mode and the browser page, every node is drawn as a card. Each card has an icon and a kind label, and the color is only an accent on the icon. Start and End are yellow circles. Cards follow your VS Code theme in the extension and your OS color scheme in the browser.
+
+In the Mermaid output, each primitive type has a distinct shape and color:
 
 | Node | Shape | Color |
 | --- | --- | --- |
