@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.1] - 2026-11-26
+
+### Fixed
+
+- Python child-context and retry helpers split across multiple lines no longer appear twice. The helper body stays inside the compound container instead of also being inlined at the top level.
+
 ## [0.14.0] - 2026-11-25
 
 ### Changed
