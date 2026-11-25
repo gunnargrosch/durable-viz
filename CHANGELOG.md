@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.13.0] - 2026-11-25
+
+### Added
+
+- **Nested operations in child contexts and retry blocks.** TypeScript/JavaScript, Python, Java, C#, Rust, and Go now attach operations inside `runInChildContext` and retry bodies. The diagram draws each container and its body in one compound dashed subgraph, with the solid workflow flow passing through the nested operations.
+- The OTel tab includes nested operations in the expected span tree.
+
+### Changed
+
+- The VS Code extension now bundles the repo changelog in the VSIX, so the Open VSX changes page shows release notes.
+- Updated the repo, CLI, and VS Code READMEs for nested operations and the compound subgraph layout.
+
 ## [0.12.2] - 2026-11-23
 
 ### Added
