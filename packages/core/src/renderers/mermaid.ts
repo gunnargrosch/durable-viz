@@ -2,7 +2,7 @@
  * Render a WorkflowGraph as a Mermaid flowchart.
  */
 
-import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../graph.js'
+import { buildEdges, type WorkflowGraph, type WorkflowNode, type WorkflowEdge } from '../graph.js'
 
 export interface MermaidOptions {
   direction?: 'TD' | 'LR'
@@ -109,6 +109,16 @@ function renderEdge(edge: WorkflowEdge): string {
   return `  ${edge.from} ${arrow} ${edge.to}`
 }
 
+/** Leaf nodes inside a container body, used as exits to the next workflow node. */
+function exitIds(node: WorkflowNode): string[] {
+  if (!node.children?.length) return [node.id]
+  const childEdges = buildEdges(node.children)
+  const sources = new Set(childEdges.map((edge) => edge.from))
+  const leaves = node.children.filter((child) => !sources.has(child.id))
+  if (leaves.length === 0) return [node.id]
+  return leaves.flatMap((leaf) => exitIds(leaf))
+}
+
 function styleForKind(node: WorkflowNode): string | undefined {
   switch (node.kind) {
     case 'start':
@@ -156,6 +166,8 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
 
   // Collect all nodes for styling and click callbacks
   const allNodes: WorkflowNode[] = []
+  const topLevelExits = new Map<string, string[]>()
+  for (const node of graph.nodes) topLevelExits.set(node.id, exitIds(node))
 
   const subgraphStyle = (subId: string) =>
     `  style ${subId} fill:transparent,stroke:#444,stroke-width:1px,stroke-dasharray:5 5,rx:8,ry:8`
@@ -169,6 +181,7 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
     allNodes.push(node)
 
     const hasBranches = (node.kind === 'parallel' || node.kind === 'map') && node.branches?.length
+    const hasChildren = node.children?.length
 
     if (hasBranches) {
       // Emit the parallel/map hub node outside the subgraph
@@ -187,6 +200,24 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
 
       lines.push('  end')
       // Style the subgraph container
+      lines.push(subgraphStyle(subId))
+    } else if (hasChildren) {
+      const subId = `sub_${node.id}`
+      lines.push(`  subgraph ${subId}[" "]`)
+      lines.push(`    ${node.id}${shapeForKind(node)}`)
+      lines.push(`    ${node.id} -.-> ${node.children![0].id}`)
+      for (const child of node.children!) {
+        allNodes.push(child)
+        lines.push(`    ${child.id}${shapeForKind(child)}`)
+      }
+      const childExits = new Map<string, string[]>()
+      for (const child of node.children!) childExits.set(child.id, exitIds(child))
+      for (const edge of buildEdges(node.children!)) {
+        for (const from of childExits.get(edge.from) ?? [edge.from]) {
+          lines.push(`  ${renderEdge({ ...edge, from })}`)
+        }
+      }
+      lines.push('  end')
       lines.push(subgraphStyle(subId))
     } else if (node.kind === 'loop') {
       // The loop header sits outside the subgraph, like a parallel hub
@@ -209,9 +240,12 @@ export function renderMermaid(graph: WorkflowGraph, options?: MermaidOptions): s
 
   lines.push('')
 
-  // Edges
+  // Edges. A container body exits to the next workflow node from its last
+  // nested operation, not from the container node itself.
   for (const edge of graph.edges) {
-    lines.push(renderEdge(edge))
+    for (const from of topLevelExits.get(edge.from) ?? [edge.from]) {
+      lines.push(renderEdge({ ...edge, from }))
+    }
   }
 
   lines.push('')

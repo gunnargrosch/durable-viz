@@ -290,6 +290,34 @@ function rustLoopIterations(header: string): number | undefined {
   return count > 0 ? count : undefined
 }
 
+/** Extract operations inside a Rust child-context or retry closure. */
+function extractNestedClosureNodes(
+  body: string,
+  lineStarts: number[],
+  methodIdx: number,
+  method: string,
+  source: string,
+  baseLineOffset: number,
+): WorkflowNode[] {
+  const callStart = lineStarts[methodIdx]
+  const methodAt = body.indexOf(method, callStart)
+  if (methodAt === -1) return []
+
+  const braceIdx = body.indexOf('{', methodAt)
+  if (braceIdx === -1) return []
+
+  const prefix = body.slice(callStart, braceIdx)
+  const params = prefix.match(/\|([^|]*)\|[^{}]*$/)
+  const childContextNames = params
+    ? [params[1].split(',')[0].trim()].filter(Boolean)
+    : ['ctx', 'child']
+  if (childContextNames.length === 0) return []
+
+  const childBody = extractBraceBlock(body, braceIdx)
+  const braceLine = baseLineOffset + body.slice(0, braceIdx).split('\n').length - 1
+  return extractNodes(childBody, childContextNames, source, braceLine)
+}
+
 function extractNodes(
   body: string,
   contextNames: string[],
@@ -408,6 +436,14 @@ function extractNodes(
 
         if (info.kind === 'runInChildContext' || info.kind === 'withRetry') {
           if (config.nestingType) node.nestingType = config.nestingType
+          node.children = extractNestedClosureNodes(
+            body,
+            lineStarts,
+            methodIdx,
+            method,
+            source,
+            baseLineOffset,
+          )
         }
 
         if (info.kind === 'step' || info.kind === 'withRetry') {

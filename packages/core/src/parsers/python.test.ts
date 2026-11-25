@@ -81,6 +81,18 @@ describe('PythonParser', () => {
     assert.equal(step?.label, 'functional-step')
   })
 
+  it('attaches operations inside child contexts and retry blocks', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'python_nested.py'))
+
+    const child = graph.nodes.find((n) => n.kind === 'runInChildContext')
+    assert.ok(child)
+    assert.deepEqual(child.children?.map((n) => n.label), ['child-step'])
+
+    const retry = graph.nodes.find((n) => n.kind === 'withRetry')
+    assert.ok(retry)
+    assert.deepEqual(retry.children?.map((n) => n.label), ['retry-step'])
+  })
+
   it('generates valid edges', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'order_processor.py'))
 

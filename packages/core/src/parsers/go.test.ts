@@ -169,6 +169,14 @@ describe('GoParser', () => {
     assert.equal(end!.sourceLine, 92, 'End should land on the last statement, not the closing brace')
   })
 
+  it('attaches operations inside child contexts', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_workflow_config.go'))
+
+    const child = graph.nodes.find((n) => n.kind === 'runInChildContext')
+    assert.ok(child)
+    assert.deepEqual(child.children?.map((n) => n.label), ['close-ledger'])
+  })
+
   it('maps concurrency combinators to promise kinds', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'order_workflow_config.go'))
 

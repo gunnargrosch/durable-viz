@@ -103,6 +103,18 @@ describe('JavaParser', () => {
     assert.equal(invoke?.target, 'target')
   })
 
+  it('attaches operations inside child contexts and retry blocks', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'NestedJavaOperations.java'))
+
+    const child = graph.nodes.find((n) => n.kind === 'runInChildContext')
+    assert.ok(child)
+    assert.deepEqual(child.children?.map((n) => n.label), ['child-step', 'child-wait'])
+
+    const retry = graph.nodes.find((n) => n.kind === 'withRetry')
+    assert.ok(retry)
+    assert.deepEqual(retry.children?.map((n) => n.label), ['retry-step'])
+  })
+
   it('generates valid edges', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessor.java'))
 

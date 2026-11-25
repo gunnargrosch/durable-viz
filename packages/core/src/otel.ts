@@ -484,6 +484,12 @@ function appendNode(
       }
     }
   }
+
+  if (node.children?.length && depth < 8) {
+    for (const child of node.children) {
+      if (isOtelOperation(child)) appendNode(lines, child, indent + 1, seen, depth + 1)
+    }
+  }
 }
 
 /**

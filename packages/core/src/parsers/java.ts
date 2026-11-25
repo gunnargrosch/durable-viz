@@ -206,6 +206,44 @@ function lineOfSubstring(source: string, substring: string): number {
   return source.slice(0, idx).split('\n').length
 }
 
+/** Extract operations inside a Java child-context or retry block lambda. */
+function extractNestedLambdaNodes(
+  body: string,
+  lineStarts: number[],
+  methodIdx: number,
+  method: string,
+  helpers: Map<string, string>,
+  visited: Set<string>,
+  source: string,
+  baseLineOffset: number,
+): WorkflowNode[] {
+  const callStart = lineStarts[methodIdx]
+  const methodAt = body.indexOf(method, callStart)
+  if (methodAt === -1) return []
+
+  const arrowIdx = body.indexOf('->', methodAt)
+  if (arrowIdx === -1) return []
+  const braceIdx = body.indexOf('{', arrowIdx)
+  if (braceIdx === -1) return []
+
+  // Stop if the brace belongs to a later chain or another method.
+  const nextTerminator = body.indexOf(';', arrowIdx)
+  if (nextTerminator !== -1 && nextTerminator < braceIdx) return []
+
+  const prefix = body.slice(callStart, arrowIdx).trimEnd()
+  const parenParams = prefix.match(/\(([^()]*)\)\s*$/)
+  const singleParam = prefix.match(/([A-Za-z_]\w*)\s*$/)
+  const paramText = parenParams?.[1] ?? singleParam?.[1] ?? ''
+  const params = paramText.split(',').map((p) => p.trim()).filter(Boolean)
+  const paramIndex = /withRetry/i.test(method) ? 1 : 0
+  const childContextName = params[paramIndex]
+  if (!childContextName) return []
+
+  const childBody = extractJavaBlock(body, braceIdx + 1)
+  const braceLine = baseLineOffset + body.slice(0, braceIdx).split('\n').length - 1
+  return extractNodes(childBody, [childContextName], helpers, visited, source, braceLine)
+}
+
 /**
  * Extract durable primitive calls from a block of Java code.
  */
@@ -331,6 +369,15 @@ function extractNodes(
         if (info.kind === 'runInChildContext') {
           const config = extractJavaConfig(lines, i)
           if (config.nestingType) node.nestingType = config.nestingType
+          node.children = extractNestedLambdaNodes(
+            body, lineStarts, i, method, helpers, visited, source, baseLineOffset
+          )
+        }
+
+        if (info.kind === 'withRetry') {
+          node.children = extractNestedLambdaNodes(
+            body, lineStarts, i, method, helpers, visited, source, baseLineOffset
+          )
         }
 
         if (info.kind === 'step') {
@@ -359,6 +406,9 @@ function extractNodes(
           label: nameMatch?.[1] ?? 'withRetry',
           nestingType: config.nestingType,
           sourceLine: absLine,
+          children: extractNestedLambdaNodes(
+            body, lineStarts, i, 'withRetry', helpers, visited, source, baseLineOffset
+          ),
         })
       }
     }

@@ -174,6 +174,39 @@ function countNewlines(body: string, from: number, to: number): number {
   return body.slice(from, to).split('\n').length - 1
 }
 
+/** Extract operations inside a C# child-context lambda. */
+function extractNestedLambdaNodes(
+  body: string,
+  lineStarts: number[],
+  methodIdx: number,
+  method: string,
+  source: string,
+  baseLineOffset: number,
+): WorkflowNode[] {
+  const callStart = lineStarts[methodIdx]
+  const methodAt = body.indexOf(method, callStart)
+  if (methodAt === -1) return []
+
+  const arrowIdx = body.indexOf('=>', methodAt)
+  if (arrowIdx === -1) return []
+  const braceIdx = body.indexOf('{', arrowIdx)
+  if (braceIdx === -1) return []
+
+  const nextTerminator = body.indexOf(';', arrowIdx)
+  if (nextTerminator !== -1 && nextTerminator < braceIdx) return []
+
+  const prefix = body.slice(callStart, arrowIdx).trimEnd()
+  const parenParams = prefix.match(/\(([^()]*)\)\s*$/)
+  const singleParam = prefix.match(/([A-Za-z_]\w*)\s*$/)
+  const paramText = parenParams?.[1] ?? singleParam?.[1] ?? ''
+  const childContextName = paramText.split(',')[0].trim()
+  if (!childContextName) return []
+
+  const childBody = extractBlock(body, braceIdx + 1)
+  const braceLine = baseLineOffset + countNewlines(body, 0, braceIdx)
+  return extractNodes(childBody, [childContextName], source, braceLine)
+}
+
 /**
  * Extract durable primitives from a block of C# code.
  */
@@ -323,6 +356,9 @@ function extractNodes(
           const config = extractCSharpConfig(lines, i)
           if (config.nestingType) node.nestingType = config.nestingType
           if (config.subType) node.subType = config.subType
+          node.children = extractNestedLambdaNodes(
+            body, lineStarts, i, method, source, baseLineOffset
+          )
         }
 
         if (info.kind === 'step') {

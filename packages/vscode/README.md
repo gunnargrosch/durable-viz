@@ -26,6 +26,7 @@ Supports **TypeScript/JavaScript**, **Python**, **Java**, **C# (.NET)**, **Rust*
 - **SDK coverage.** `ParallelMixed`/incremental parallel branches and custom operation subtypes are shown in the diagram, including Go 1.0 GA.
 - **OpenTelemetry detection.** When a TypeScript, Python, or Java handler registers the OTel plugin, the panel shows an OTel badge and the expected span tree in the OTel tab. Click the badge to jump to the plugin registration. Imported helpers are followed, including the environment variable that selects the mode.
 - **Loops.** `for`, `while`, and `foreach` loops that wrap durable calls show the loop body in a dashed box with a `next` edge back to the loop.
+- **Nested operations.** Operations inside child contexts and retry blocks are drawn as nested subgraphs.
 - **Auto-refresh** on file save.
 - **Direction toggle** (TD/LR), **PNG export**, **source view** (Mermaid/JSON).
 

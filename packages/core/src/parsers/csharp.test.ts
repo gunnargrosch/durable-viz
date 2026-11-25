@@ -129,6 +129,14 @@ describe('CSharpParser', () => {
     assert.ok(graph.sourceFile?.endsWith('SharedWorkflow.cs'))
   })
 
+  it('attaches operations inside child contexts', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'NestedCSharpOperations.cs'))
+
+    const child = graph.nodes.find((n) => n.kind === 'runInChildContext')
+    assert.ok(child)
+    assert.deepEqual(child.children?.map((n) => n.label), ['child-step', 'child-wait'])
+  })
+
   it('generates valid edges', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'OrderProcessor.cs'))
 

@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { resolve } from 'node:path'
 import { TypeScriptParser } from './typescript.js'
+import { renderMermaid } from '../renderers/mermaid.js'
 
 const parser = new TypeScriptParser()
 const examplesDir = resolve(import.meta.dirname, '../../../..', 'examples')
@@ -86,6 +87,24 @@ describe('TypeScriptParser', () => {
     assert.equal(step?.label, 'reference-step')
     const callback = graph.nodes.find((n) => n.kind === 'createCallback')
     assert.equal(callback?.label, 'reference-callback')
+  })
+
+  it('attaches operations inside child contexts and retry blocks', () => {
+    const graph = parser.parseFile(resolve(fixturesDir, 'nested_context.ts'))
+
+    const child = graph.nodes.find((n) => n.kind === 'runInChildContext')
+    assert.ok(child)
+    assert.deepEqual(child.children?.map((n) => n.label), ['nested-step', 'wait: nested-wait'])
+
+    const retry = graph.nodes.find((n) => n.kind === 'withRetry')
+    assert.ok(retry)
+    assert.deepEqual(retry.children?.map((n) => n.label), ['retry-step'])
+
+    const mermaid = renderMermaid(graph)
+    assert.match(mermaid, /subgraph sub_child_/)
+    assert.match(mermaid, /nested-step/)
+    assert.match(mermaid, /retry-step/)
+    assert.match(mermaid, /wait_\d+ --> retry_\d+/)
   })
 
   it('generates edges connecting all nodes', () => {

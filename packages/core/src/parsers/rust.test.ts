@@ -177,6 +177,14 @@ describe('RustParser', () => {
     }
   })
 
+  it('attaches operations inside child contexts', () => {
+    const graph = parser.parseFile(resolve(examplesDir, 'order_workflow_config.rs'))
+
+    const child = graph.nodes.find((n) => n.kind === 'runInChildContext')
+    assert.ok(child)
+    assert.deepEqual(child.children?.map((n) => n.label), ['compute'])
+  })
+
   it('extracts config features from the order_workflow_config example', () => {
     const graph = parser.parseFile(resolve(examplesDir, 'order_workflow_config.rs'))
 

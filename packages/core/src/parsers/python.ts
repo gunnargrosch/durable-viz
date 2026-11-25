@@ -134,29 +134,40 @@ function extractPythonBlock(source: string, startIdx: number): string {
   return bodyLines.join('\n')
 }
 
+interface PythonHelper {
+  body: string
+  contextParam: string
+  offset: number
+}
+
 /**
  * Find helper functions that accept DurableContext and contain durable calls.
  */
-function findHelperFunctions(source: string, contextNames: string[]): Map<string, string> {
-  const helpers = new Map<string, string>()
+function findHelperFunctions(source: string): Map<string, PythonHelper> {
+  const helpers = new Map<string, PythonHelper>()
   // Match: def func_name(..., param: DurableContext, ...):
   const funcPattern = /def\s+(\w+)\s*\(([^)]*DurableContext[^)]*)\)[^:]*:/g
   let match
 
   while ((match = funcPattern.exec(source)) !== null) {
     const funcName = match[1]
+    const contextParam = match[2].match(/(\w+)\s*:\s*DurableContext/)?.[1]
+    if (!contextParam) continue
+
     const startIdx = match.index + match[0].length
     const body = extractPythonBlock(source, startIdx)
 
     // Check if the body contains durable calls
-    const hasContextCall = contextNames.some((name) =>
-      Object.keys(PRIMITIVES).some((method) =>
-        body.includes(`${name}.${method}(`)
-      )
+    const hasContextCall = Object.keys(PRIMITIVES).some((method) =>
+      body.includes(`${contextParam}.${method}(`)
     )
 
     if (hasContextCall) {
-      helpers.set(funcName, body)
+      helpers.set(funcName, {
+        body,
+        contextParam,
+        offset: lineOfSubstring(source, body),
+      })
     }
   }
 
@@ -193,7 +204,7 @@ function pythonLoopIterations(header: string): number | undefined {
 function extractNodes(
   body: string,
   contextNames: string[],
-  helpers: Map<string, string>,
+  helpers: Map<string, PythonHelper>,
   visited: Set<string>,
   source: string,
   baseLineOffset: number,
@@ -319,6 +330,20 @@ function extractNodes(
           const config = extractPythonConfig(lines, i)
           if (config.nestingType) node.nestingType = config.nestingType
           if (config.subType) node.subType = config.subType
+          const callText = lines.slice(i, i + 10).join('\n')
+          const childName = callText.match(/run_in_child_context\s*\(\s*(\w+)/)?.[1]
+            ?? callText.match(/run_in_child_context\s*\(\s*func\s*=\s*(\w+)/)?.[1]
+          const childHelper = childName ? helpers.get(childName) : undefined
+          if (childHelper) {
+            node.children = extractNodes(
+              childHelper.body,
+              [childHelper.contextParam],
+              helpers,
+              new Set(),
+              source,
+              childHelper.offset,
+            )
+          }
         }
 
         if (info.kind === 'step') {
@@ -346,22 +371,41 @@ function extractNodes(
         matched = true
         const nameMatch = multiLineText.match(/with_retry\s*\([\s\S]*?name\s*=\s*["']([^"']+)["']/)
         const config = extractPythonConfig(lines, i)
+        const retryName = multiLineText.match(/with_retry\s*\(\s*\w+\s*,\s*(\w+)/)?.[1]
+          ?? multiLineText.match(/with_retry\s*\([\s\S]*?func\s*=\s*(\w+)/)?.[1]
+        const retryHelper = retryName ? helpers.get(retryName) : undefined
         nodes.push({
           id: nextId('retry'),
           kind: 'withRetry',
           label: nameMatch?.[1] ?? 'with_retry',
           nestingType: config.nestingType,
           sourceLine: absLine,
+          ...(retryHelper ? {
+            children: extractNodes(
+              retryHelper.body,
+              [retryHelper.contextParam],
+              helpers,
+              new Set(),
+              source,
+              retryHelper.offset,
+            ),
+          } : {}),
         })
       }
     }
 
     if (!matched) {
-      for (const [funcName, helperBody] of helpers) {
+      for (const [funcName, helper] of helpers) {
         if (line.includes(`${funcName}(`) && !visited.has(funcName)) {
           visited.add(funcName)
-          const helperOffset = lineOfSubstring(source, helperBody)
-          const inlined = extractNodes(helperBody, contextNames, helpers, visited, source, helperOffset)
+          const inlined = extractNodes(
+            helper.body,
+            [helper.contextParam],
+            helpers,
+            visited,
+            source,
+            helper.offset,
+          )
           nodes.push(...inlined)
           visited.delete(funcName)
         }
@@ -499,7 +543,7 @@ export class PythonParser implements Parser {
     }
 
     const contextNames = findContextParam(source)
-    const helpers = findHelperFunctions(source, contextNames)
+    const helpers = findHelperFunctions(source)
 
     const handlerOffset = lineOfSubstring(source, handlerBody)
     const workflowNodes = extractNodes(handlerBody, contextNames, helpers, new Set(), source, handlerOffset)

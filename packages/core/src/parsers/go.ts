@@ -599,6 +599,27 @@ function goLoopIterations(header: string): number | undefined {
   return undefined
 }
 
+/** Extract operations inside a Go child-context or retry function literal. */
+function extractNestedFunctionNodes(
+  fnArg: string | undefined,
+  helpers: Map<string, { body: string; offset: number }>,
+  source: string,
+  alias: string,
+): WorkflowNode[] {
+  if (!fnArg) return []
+  const mask = maskCode(fnArg)
+  const braceIdx = mask.indexOf('{')
+  if (braceIdx === -1) return []
+
+  const prefix = fnArg.slice(0, braceIdx)
+  const childName = prefix.match(/func\s*\(\s*([A-Za-z_]\w*)/)?.[1]
+  if (!childName) return []
+
+  const childBody = extractBlock(fnArg, mask, braceIdx)
+  const childOffset = lineOfSubstring(source, childBody)
+  return extractNodes(childBody, [childName], helpers, new Set(), source, childOffset, alias)
+}
+
 function extractNodes(
   body: string,
   contextNames: string[],
@@ -742,6 +763,7 @@ function extractNodes(
       if (info.kind === 'runInChildContext') {
         if (config.nestingType) node.nestingType = config.nestingType
         if (config.subType) node.subType = config.subType
+        node.children = extractNestedFunctionNodes(args[2], helpers, source, alias)
       }
 
       if (info.kind === 'step') {
@@ -760,6 +782,7 @@ function extractNodes(
           const named = strategyExpr.match(new RegExp(`(?:${alias}\\.)?(\\w+)`))
           node.retryStrategy = named?.[1]
         }
+        node.children = extractNestedFunctionNodes(args[2], helpers, source, alias)
       }
 
       nodes.push(node)

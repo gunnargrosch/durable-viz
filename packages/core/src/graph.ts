@@ -31,6 +31,8 @@ export interface WorkflowNode {
   label: string
   /** For parallel nodes, the child branches. */
   branches?: WorkflowBranch[]
+  /** For child contexts and retry blocks, operations inside the body. */
+  children?: WorkflowNode[]
   /** For condition nodes, the expression text (e.g. "requireApproval"). */
   condition?: string
   /** For condition nodes, how many subsequent nodes belong to the then-branch. */

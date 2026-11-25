@@ -293,6 +293,10 @@ For TypeScript/JavaScript and Python, durable-viz follows imported helper files.
 
 Durable-viz reads the handler source and imported helpers only. A plugin selected through `DURABLE_EXECUTION_PLUGINS`, a Lambda layer, or deployment configuration does not show up unless the handler code references the plugin. When a helper selects the mode at runtime, the badge shows `OTel: env`, its tooltip names the environment variable and the modes it can choose, and the OTel tab lists the operation spans without assuming the Workflow or Invocation root.
 
+### Nested operations
+
+Operations inside `runInChildContext` and retry blocks are drawn as a compound dashed subgraph. The container connects to its first body operation with a dashed edge, and the solid workflow flow exits from the last nested operation. The OTel tab shows the same nesting in the expected span tree. Click any nested node to jump to its source line.
+
 ### Visual Encoding
 
 Each primitive type has a distinct shape and color in the diagram:

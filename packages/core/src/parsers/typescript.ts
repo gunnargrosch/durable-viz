@@ -352,6 +352,41 @@ function resolveRegistryKeys(mapArg: Node, sourceFile: SourceFile): string[] {
   return []
 }
 
+/** Parse operations inside a child-context or with-retry function body. */
+function extractNestedFunctionNodes(
+  call: CallExpression,
+  durableFunctions: Map<string, { body: Block; contextParam: string }>,
+  sourceFile: SourceFile,
+): WorkflowNode[] {
+  const fnArg = [...call.getArguments()].reverse().find((arg) =>
+    arg.getKind() === SyntaxKind.ArrowFunction || arg.getKind() === SyntaxKind.FunctionExpression
+  )
+  if (!fnArg) return []
+
+  const fn = fnArg as ArrowFunction | FunctionExpression
+  const body = fn.getBody()
+  if (!body || body.getKind() !== SyntaxKind.Block) return []
+
+  const childContextNames = new Set<string>()
+  const params = fn.getParameters()
+  for (const param of params) {
+    const typeText = param.getTypeNode()?.getText() ?? ''
+    if (typeText.includes('DurableContext')) childContextNames.add(param.getName())
+  }
+  if (childContextNames.size === 0 && params.length > 0) {
+    childContextNames.add(params[0].getName())
+  }
+  if (childContextNames.size === 0) return []
+
+  return extractFromBlock(
+    (body as Block).getStatements(),
+    childContextNames,
+    durableFunctions,
+    new Set(),
+    sourceFile,
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Parallel branch extraction
 // ---------------------------------------------------------------------------
@@ -669,6 +704,7 @@ function extractFromBlock(
           nestingType: getNestingType(call),
           subType: getConfigProp(call, 'subType'),
           sourceLine: lineOf(call),
+          children: extractNestedFunctionNodes(call, durableFunctions, sourceFile),
         })
       } else if (isDurableCall(call, 'map', contextNames)) {
         markDescendants(call, consumed)
@@ -724,6 +760,7 @@ function extractFromBlock(
           retryStrategy: getRetryStrategy(call),
           nestingType: getNestingType(call),
           sourceLine: lineOf(call),
+          children: extractNestedFunctionNodes(call, durableFunctions, sourceFile),
         })
       } else {
         // --- Function-reference following ---
