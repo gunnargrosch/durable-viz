@@ -211,6 +211,7 @@ function extractNodes(
 ): WorkflowNode[] {
   const nodes: WorkflowNode[] = []
   const lines = body.split('\n')
+  const suppressedHelpers = new Set<string>()
 
   // Character offset of each line within `body`.
   const lineStarts: number[] = []
@@ -333,6 +334,7 @@ function extractNodes(
           const callText = lines.slice(i, i + 10).join('\n')
           const childName = callText.match(/run_in_child_context\s*\(\s*(\w+)/)?.[1]
             ?? callText.match(/run_in_child_context\s*\(\s*func\s*=\s*(\w+)/)?.[1]
+          if (childName) suppressedHelpers.add(childName)
           const childHelper = childName ? helpers.get(childName) : undefined
           if (childHelper) {
             node.children = extractNodes(
@@ -373,6 +375,7 @@ function extractNodes(
         const config = extractPythonConfig(lines, i)
         const retryName = multiLineText.match(/with_retry\s*\(\s*\w+\s*,\s*(\w+)/)?.[1]
           ?? multiLineText.match(/with_retry\s*\([\s\S]*?func\s*=\s*(\w+)/)?.[1]
+        if (retryName) suppressedHelpers.add(retryName)
         const retryHelper = retryName ? helpers.get(retryName) : undefined
         nodes.push({
           id: nextId('retry'),
@@ -396,6 +399,7 @@ function extractNodes(
 
     if (!matched) {
       for (const [funcName, helper] of helpers) {
+        if (suppressedHelpers.has(funcName)) continue
         if (line.includes(`${funcName}(`) && !visited.has(funcName)) {
           visited.add(funcName)
           const inlined = extractNodes(

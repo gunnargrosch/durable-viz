@@ -91,6 +91,10 @@ describe('PythonParser', () => {
     const retry = graph.nodes.find((n) => n.kind === 'withRetry')
     assert.ok(retry)
     assert.deepEqual(retry.children?.map((n) => n.label), ['retry-step'])
+
+    const topLevelSteps = graph.nodes.filter((n) => n.kind === 'step').map((n) => n.label)
+    assert.ok(!topLevelSteps.includes('child-step'))
+    assert.ok(!topLevelSteps.includes('retry-step'))
   })
 
   it('generates valid edges', () => {

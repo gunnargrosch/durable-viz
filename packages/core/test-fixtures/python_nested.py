@@ -20,6 +20,14 @@ def retry_operation(ctx: DurableContext, attempt: int) -> str:
 
 @durable_execution
 def handler(event: dict, context: DurableContext) -> str:
-    context.run_in_child_context(child_operation(str(event)), name="nested-child")
-    with_retry(context, retry_operation, WithRetryConfig(), name="nested-retry")
+    context.run_in_child_context(
+        child_operation(str(event)),
+        name="nested-child",
+    )
+    with_retry(
+        context,
+        retry_operation,
+        WithRetryConfig(),
+        name="nested-retry",
+    )
     return "done"
